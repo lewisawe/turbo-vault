@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	_ "github.com/go-sql-driver/mysql"
 	
 	"github.com/keyvault/agent/internal/config"
@@ -77,9 +78,14 @@ type SecretFilter struct {
 
 // Storage provides encrypted storage with pluggable backends
 type Storage struct {
-	backend   StorageBackend
-	encryptor crypto.Encryptor
-	keyID     string
+	backend           StorageBackend
+	encryptor         crypto.Encryptor
+	keyID             string
+	migrationManager  *MigrationManager
+	clusterManager    *ClusterManager
+	backupManager     *BackupManager
+	performanceMonitor *PerformanceMonitor
+	db                *sql.DB
 }
 
 // NewStorage creates a new storage instance with the specified backend
@@ -88,6 +94,19 @@ func NewStorage(cfg *config.DatabaseConfig, cryptoService *crypto.CryptoService)
 	backend, err := createBackend(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage backend: %w", err)
+	}
+
+	// Get database connection for additional components
+	var db *sql.DB
+	switch b := backend.(type) {
+	case *SQLiteBackend:
+		db = b.db
+	case *PostgreSQLBackend:
+		db = b.db
+	case *MySQLBackend:
+		db = b.db
+	default:
+		return nil, fmt.Errorf("unsupported backend type")
 	}
 
 	// Use default key for encryption
@@ -103,11 +122,34 @@ func NewStorage(cfg *config.DatabaseConfig, cryptoService *crypto.CryptoService)
 		}
 	}
 
-	return &Storage{
+	storage := &Storage{
 		backend:   backend,
 		encryptor: cryptoService.Encryptor(),
 		keyID:     keyID,
-	}, nil
+		db:        db,
+	}
+
+	// Initialize migration manager
+	storage.migrationManager = NewMigrationManager(db, cfg.Type)
+	storage.migrationManager.RegisterCoreMigrations()
+
+	// Initialize migration tracking
+	if err := storage.migrationManager.Initialize(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to initialize migrations: %w", err)
+	}
+
+	// Run migrations
+	if err := storage.migrationManager.MigrateToLatest(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	// Initialize backup manager
+	storage.backupManager = NewBackupManager(storage, db, cryptoService.Encryptor(), keyID)
+
+	// Initialize performance monitor
+	storage.performanceMonitor = NewPerformanceMonitor(db, cfg.Type)
+
+	return storage, nil
 }
 
 // createBackend creates the appropriate storage backend
@@ -239,7 +281,64 @@ func (s *Storage) HealthCheck(ctx context.Context) error {
 
 // Close closes the storage backend
 func (s *Storage) Close() error {
+	if s.performanceMonitor != nil {
+		s.performanceMonitor.Stop()
+	}
+	if s.clusterManager != nil {
+		s.clusterManager.Stop(context.Background())
+	}
 	return s.backend.Close()
+}
+
+// InitializeCluster initializes clustering support
+func (s *Storage) InitializeCluster(config *ClusterConfig) error {
+	if s.clusterManager != nil {
+		return fmt.Errorf("cluster manager already initialized")
+	}
+
+	cm, err := NewClusterManager(s, config, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to create cluster manager: %w", err)
+	}
+
+	s.clusterManager = cm
+	return nil
+}
+
+// StartCluster starts the cluster manager
+func (s *Storage) StartCluster(ctx context.Context) error {
+	if s.clusterManager == nil {
+		return fmt.Errorf("cluster manager not initialized")
+	}
+	return s.clusterManager.Start(ctx)
+}
+
+// StartPerformanceMonitoring starts performance monitoring
+func (s *Storage) StartPerformanceMonitoring(ctx context.Context) error {
+	if s.performanceMonitor == nil {
+		return fmt.Errorf("performance monitor not initialized")
+	}
+	return s.performanceMonitor.Start(ctx)
+}
+
+// GetMigrationManager returns the migration manager
+func (s *Storage) GetMigrationManager() *MigrationManager {
+	return s.migrationManager
+}
+
+// GetClusterManager returns the cluster manager
+func (s *Storage) GetClusterManager() *ClusterManager {
+	return s.clusterManager
+}
+
+// GetBackupManager returns the backup manager
+func (s *Storage) GetBackupManager() *BackupManager {
+	return s.backupManager
+}
+
+// GetPerformanceMonitor returns the performance monitor
+func (s *Storage) GetPerformanceMonitor() *PerformanceMonitor {
+	return s.performanceMonitor
 }
 
 // Backup creates a backup of the storage
@@ -259,7 +358,7 @@ type SQLiteBackend struct {
 
 // NewSQLiteBackend creates a new SQLite storage backend
 func NewSQLiteBackend(cfg *config.DatabaseConfig) (*SQLiteBackend, error) {
-	db, err := sql.Open("sqlite3", cfg.GetDatabaseConnectionString())
+	db, err := sql.Open("sqlite3", cfg.ConnectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open SQLite database: %w", err)
 	}
@@ -281,34 +380,8 @@ func NewSQLiteBackend(cfg *config.DatabaseConfig) (*SQLiteBackend, error) {
 
 // migrate runs database migrations for SQLite
 func (b *SQLiteBackend) migrate() error {
-	query := `
-	CREATE TABLE IF NOT EXISTS secrets (
-		id TEXT PRIMARY KEY,
-		name TEXT NOT NULL UNIQUE,
-		encrypted_value BLOB NOT NULL,
-		key_id TEXT NOT NULL,
-		metadata TEXT DEFAULT '{}',
-		tags TEXT DEFAULT '[]',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME,
-		rotation_due DATETIME,
-		version INTEGER DEFAULT 1,
-		created_by TEXT DEFAULT '',
-		access_count INTEGER DEFAULT 0,
-		last_accessed DATETIME,
-		status TEXT DEFAULT 'active'
-	);
-	
-	CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name);
-	CREATE INDEX IF NOT EXISTS idx_secrets_status ON secrets(status);
-	CREATE INDEX IF NOT EXISTS idx_secrets_created_at ON secrets(created_at);
-	CREATE INDEX IF NOT EXISTS idx_secrets_rotation_due ON secrets(rotation_due);
-	CREATE INDEX IF NOT EXISTS idx_secrets_expires_at ON secrets(expires_at);
-	`
-	
-	_, err := b.db.Exec(query)
-	return err
+	// Migration is now handled by MigrationManager
+	return nil
 }
 
 // CreateSecret implements StorageBackend.CreateSecret for SQLite
@@ -492,7 +565,12 @@ type PostgreSQLBackend struct {
 
 // NewPostgreSQLBackend creates a new PostgreSQL storage backend
 func NewPostgreSQLBackend(cfg *config.DatabaseConfig) (*PostgreSQLBackend, error) {
-	db, err := sql.Open("postgres", cfg.GetDatabaseConnectionString())
+	connectionString := cfg.ConnectionString
+	if connectionString == "" {
+		connectionString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database, cfg.SSLMode)
+	}
+	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open PostgreSQL database: %w", err)
 	}
@@ -514,60 +592,162 @@ func NewPostgreSQLBackend(cfg *config.DatabaseConfig) (*PostgreSQLBackend, error
 
 // migrate runs database migrations for PostgreSQL
 func (b *PostgreSQLBackend) migrate() error {
-	query := `
-	CREATE TABLE IF NOT EXISTS secrets (
-		id UUID PRIMARY KEY,
-		name VARCHAR(255) NOT NULL UNIQUE,
-		encrypted_value BYTEA NOT NULL,
-		key_id VARCHAR(255) NOT NULL,
-		metadata JSONB DEFAULT '{}',
-		tags TEXT[] DEFAULT '{}',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		expires_at TIMESTAMP WITH TIME ZONE,
-		rotation_due TIMESTAMP WITH TIME ZONE,
-		version INTEGER DEFAULT 1,
-		created_by VARCHAR(255) DEFAULT '',
-		access_count BIGINT DEFAULT 0,
-		last_accessed TIMESTAMP WITH TIME ZONE,
-		status VARCHAR(20) DEFAULT 'active'
-	);
+	// Migration is now handled by MigrationManager
+	return nil
+}
+
+// CreateSecret implements StorageBackend.CreateSecret for PostgreSQL
+func (b *PostgreSQLBackend) CreateSecret(ctx context.Context, secret *Secret) error {
+	metadataJSON, _ := json.Marshal(secret.Metadata)
 	
-	CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name);
-	CREATE INDEX IF NOT EXISTS idx_secrets_status ON secrets(status);
-	CREATE INDEX IF NOT EXISTS idx_secrets_created_at ON secrets(created_at);
-	CREATE INDEX IF NOT EXISTS idx_secrets_rotation_due ON secrets(rotation_due);
-	CREATE INDEX IF NOT EXISTS idx_secrets_expires_at ON secrets(expires_at);
-	CREATE INDEX IF NOT EXISTS idx_secrets_metadata ON secrets USING GIN(metadata);
+	query := `
+	INSERT INTO secrets (id, name, encrypted_value, key_id, metadata, tags, 
+		created_at, updated_at, expires_at, rotation_due, version, created_by, status)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 	
-	_, err := b.db.Exec(query)
+	_, err := b.db.ExecContext(ctx, query, 
+		secret.ID, secret.Name, secret.EncryptedValue, secret.KeyID,
+		string(metadataJSON), pq.Array(secret.Tags),
+		secret.CreatedAt, secret.UpdatedAt, secret.ExpiresAt, secret.RotationDue,
+		secret.Version, secret.CreatedBy, secret.Status)
+	
 	return err
 }
 
-// Implement the same methods as SQLiteBackend but with PostgreSQL-specific SQL
-// (CreateSecret, GetSecret, UpdateSecret, DeleteSecret, ListSecrets, HealthCheck, Close, Backup, Restore)
-// Implementation would be similar but using PostgreSQL syntax and features
-
-func (b *PostgreSQLBackend) CreateSecret(ctx context.Context, secret *Secret) error {
-	// PostgreSQL implementation
-	return fmt.Errorf("PostgreSQL backend not fully implemented")
-}
-
+// GetSecret implements StorageBackend.GetSecret for PostgreSQL
 func (b *PostgreSQLBackend) GetSecret(ctx context.Context, id string) (*Secret, error) {
-	return nil, fmt.Errorf("PostgreSQL backend not fully implemented")
+	query := `
+	SELECT id, name, encrypted_value, key_id, metadata, tags,
+		created_at, updated_at, expires_at, rotation_due, version,
+		created_by, access_count, last_accessed, status
+	FROM secrets WHERE id = $1
+	`
+	
+	var secret Secret
+	var metadataJSON string
+	
+	err := b.db.QueryRowContext(ctx, query, id).Scan(
+		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
+		&metadataJSON, pq.Array(&secret.Tags), &secret.CreatedAt, &secret.UpdatedAt,
+		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
+		&secret.CreatedBy, &secret.AccessCount, &secret.LastAccessed, &secret.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+	
+	return &secret, nil
 }
 
+// UpdateSecret implements StorageBackend.UpdateSecret for PostgreSQL
 func (b *PostgreSQLBackend) UpdateSecret(ctx context.Context, id string, secret *Secret) error {
-	return fmt.Errorf("PostgreSQL backend not fully implemented")
+	metadataJSON, _ := json.Marshal(secret.Metadata)
+	
+	query := `
+	UPDATE secrets 
+	SET name = $1, encrypted_value = $2, key_id = $3, metadata = $4, tags = $5,
+		updated_at = $6, expires_at = $7, rotation_due = $8, version = version + 1,
+		status = $9
+	WHERE id = $10
+	`
+	
+	_, err := b.db.ExecContext(ctx, query,
+		secret.Name, secret.EncryptedValue, secret.KeyID,
+		string(metadataJSON), pq.Array(secret.Tags), secret.UpdatedAt,
+		secret.ExpiresAt, secret.RotationDue, secret.Status, id)
+	
+	return err
 }
 
+// DeleteSecret implements StorageBackend.DeleteSecret for PostgreSQL
 func (b *PostgreSQLBackend) DeleteSecret(ctx context.Context, id string) error {
-	return fmt.Errorf("PostgreSQL backend not fully implemented")
+	query := `DELETE FROM secrets WHERE id = $1`
+	_, err := b.db.ExecContext(ctx, query, id)
+	return err
 }
 
+// ListSecrets implements StorageBackend.ListSecrets for PostgreSQL
 func (b *PostgreSQLBackend) ListSecrets(ctx context.Context, filter *SecretFilter) ([]*Secret, error) {
-	return nil, fmt.Errorf("PostgreSQL backend not fully implemented")
+	query := `
+	SELECT id, name, key_id, metadata, tags, created_at, updated_at,
+		expires_at, rotation_due, version, created_by, access_count,
+		last_accessed, status
+	FROM secrets
+	WHERE 1=1
+	`
+	args := []interface{}{}
+	argIndex := 1
+	
+	// Apply filters
+	if filter != nil {
+		if filter.Status != "" {
+			query += fmt.Sprintf(" AND status = $%d", argIndex)
+			args = append(args, filter.Status)
+			argIndex++
+		}
+		if filter.NamePattern != "" {
+			query += fmt.Sprintf(" AND name ILIKE $%d", argIndex)
+			args = append(args, "%"+filter.NamePattern+"%")
+			argIndex++
+		}
+		if filter.CreatedBy != "" {
+			query += fmt.Sprintf(" AND created_by = $%d", argIndex)
+			args = append(args, filter.CreatedBy)
+			argIndex++
+		}
+		if filter.CreatedAfter != nil {
+			query += fmt.Sprintf(" AND created_at > $%d", argIndex)
+			args = append(args, filter.CreatedAfter)
+			argIndex++
+		}
+	}
+	
+	query += " ORDER BY created_at DESC"
+	
+	// Apply limit and offset
+	if filter != nil {
+		if filter.Limit > 0 {
+			query += fmt.Sprintf(" LIMIT $%d", argIndex)
+			args = append(args, filter.Limit)
+			argIndex++
+		}
+		if filter.Offset > 0 {
+			query += fmt.Sprintf(" OFFSET $%d", argIndex)
+			args = append(args, filter.Offset)
+			argIndex++
+		}
+	}
+	
+	rows, err := b.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var secrets []*Secret
+	for rows.Next() {
+		var secret Secret
+		var metadataJSON string
+		
+		err := rows.Scan(
+			&secret.ID, &secret.Name, &secret.KeyID, &metadataJSON, pq.Array(&secret.Tags),
+			&secret.CreatedAt, &secret.UpdatedAt, &secret.ExpiresAt,
+			&secret.RotationDue, &secret.Version, &secret.CreatedBy,
+			&secret.AccessCount, &secret.LastAccessed, &secret.Status,
+		)
+		if err != nil {
+			continue
+		}
+		
+		json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+		
+		secrets = append(secrets, &secret)
+	}
+	
+	return secrets, nil
 }
 
 func (b *PostgreSQLBackend) HealthCheck(ctx context.Context) error {
@@ -580,11 +760,13 @@ func (b *PostgreSQLBackend) Close() error {
 }
 
 func (b *PostgreSQLBackend) Backup(ctx context.Context, destination string) error {
-	return fmt.Errorf("backup not implemented for PostgreSQL backend")
+	// PostgreSQL backup using pg_dump
+	return fmt.Errorf("PostgreSQL backup requires pg_dump - use BackupManager instead")
 }
 
 func (b *PostgreSQLBackend) Restore(ctx context.Context, source string) error {
-	return fmt.Errorf("restore not implemented for PostgreSQL backend")
+	// PostgreSQL restore using pg_restore
+	return fmt.Errorf("PostgreSQL restore requires pg_restore - use BackupManager instead")
 }
 
 // MySQLBackend implements StorageBackend for MySQL
@@ -594,7 +776,12 @@ type MySQLBackend struct {
 
 // NewMySQLBackend creates a new MySQL storage backend
 func NewMySQLBackend(cfg *config.DatabaseConfig) (*MySQLBackend, error) {
-	db, err := sql.Open("mysql", cfg.GetDatabaseConnectionString())
+	connectionString := cfg.ConnectionString
+	if connectionString == "" {
+		connectionString = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+			cfg.Username, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
+	}
+	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open MySQL database: %w", err)
 	}
@@ -616,57 +803,159 @@ func NewMySQLBackend(cfg *config.DatabaseConfig) (*MySQLBackend, error) {
 
 // migrate runs database migrations for MySQL
 func (b *MySQLBackend) migrate() error {
+	// Migration is now handled by MigrationManager
+	return nil
+}
+
+// CreateSecret implements StorageBackend.CreateSecret for MySQL
+func (b *MySQLBackend) CreateSecret(ctx context.Context, secret *Secret) error {
+	metadataJSON, _ := json.Marshal(secret.Metadata)
+	tagsJSON, _ := json.Marshal(secret.Tags)
+	
 	query := `
-	CREATE TABLE IF NOT EXISTS secrets (
-		id VARCHAR(36) PRIMARY KEY,
-		name VARCHAR(255) NOT NULL UNIQUE,
-		encrypted_value LONGBLOB NOT NULL,
-		key_id VARCHAR(255) NOT NULL,
-		metadata JSON,
-		tags JSON,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		expires_at TIMESTAMP NULL,
-		rotation_due TIMESTAMP NULL,
-		version INT DEFAULT 1,
-		created_by VARCHAR(255) DEFAULT '',
-		access_count BIGINT DEFAULT 0,
-		last_accessed TIMESTAMP NULL,
-		status VARCHAR(20) DEFAULT 'active',
-		
-		INDEX idx_secrets_name (name),
-		INDEX idx_secrets_status (status),
-		INDEX idx_secrets_created_at (created_at),
-		INDEX idx_secrets_rotation_due (rotation_due),
-		INDEX idx_secrets_expires_at (expires_at)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+	INSERT INTO secrets (id, name, encrypted_value, key_id, metadata, tags, 
+		created_at, updated_at, expires_at, rotation_due, version, created_by, status)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	
-	_, err := b.db.Exec(query)
+	_, err := b.db.ExecContext(ctx, query, 
+		secret.ID, secret.Name, secret.EncryptedValue, secret.KeyID,
+		string(metadataJSON), string(tagsJSON),
+		secret.CreatedAt, secret.UpdatedAt, secret.ExpiresAt, secret.RotationDue,
+		secret.Version, secret.CreatedBy, secret.Status)
+	
 	return err
 }
 
-// Implement the same methods as SQLiteBackend but with MySQL-specific SQL
-// (CreateSecret, GetSecret, UpdateSecret, DeleteSecret, ListSecrets, HealthCheck, Close, Backup, Restore)
-
-func (b *MySQLBackend) CreateSecret(ctx context.Context, secret *Secret) error {
-	return fmt.Errorf("MySQL backend not fully implemented")
-}
-
+// GetSecret implements StorageBackend.GetSecret for MySQL
 func (b *MySQLBackend) GetSecret(ctx context.Context, id string) (*Secret, error) {
-	return nil, fmt.Errorf("MySQL backend not fully implemented")
+	query := `
+	SELECT id, name, encrypted_value, key_id, metadata, tags,
+		created_at, updated_at, expires_at, rotation_due, version,
+		created_by, access_count, last_accessed, status
+	FROM secrets WHERE id = ?
+	`
+	
+	var secret Secret
+	var metadataJSON, tagsJSON string
+	
+	err := b.db.QueryRowContext(ctx, query, id).Scan(
+		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
+		&metadataJSON, &tagsJSON, &secret.CreatedAt, &secret.UpdatedAt,
+		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
+		&secret.CreatedBy, &secret.AccessCount, &secret.LastAccessed, &secret.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+	json.Unmarshal([]byte(tagsJSON), &secret.Tags)
+	
+	return &secret, nil
 }
 
+// UpdateSecret implements StorageBackend.UpdateSecret for MySQL
 func (b *MySQLBackend) UpdateSecret(ctx context.Context, id string, secret *Secret) error {
-	return fmt.Errorf("MySQL backend not fully implemented")
+	metadataJSON, _ := json.Marshal(secret.Metadata)
+	tagsJSON, _ := json.Marshal(secret.Tags)
+	
+	query := `
+	UPDATE secrets 
+	SET name = ?, encrypted_value = ?, key_id = ?, metadata = ?, tags = ?,
+		updated_at = ?, expires_at = ?, rotation_due = ?, version = version + 1,
+		status = ?
+	WHERE id = ?
+	`
+	
+	_, err := b.db.ExecContext(ctx, query,
+		secret.Name, secret.EncryptedValue, secret.KeyID,
+		string(metadataJSON), string(tagsJSON), secret.UpdatedAt,
+		secret.ExpiresAt, secret.RotationDue, secret.Status, id)
+	
+	return err
 }
 
+// DeleteSecret implements StorageBackend.DeleteSecret for MySQL
 func (b *MySQLBackend) DeleteSecret(ctx context.Context, id string) error {
-	return fmt.Errorf("MySQL backend not fully implemented")
+	query := `DELETE FROM secrets WHERE id = ?`
+	_, err := b.db.ExecContext(ctx, query, id)
+	return err
 }
 
+// ListSecrets implements StorageBackend.ListSecrets for MySQL
 func (b *MySQLBackend) ListSecrets(ctx context.Context, filter *SecretFilter) ([]*Secret, error) {
-	return nil, fmt.Errorf("MySQL backend not fully implemented")
+	query := `
+	SELECT id, name, key_id, metadata, tags, created_at, updated_at,
+		expires_at, rotation_due, version, created_by, access_count,
+		last_accessed, status
+	FROM secrets
+	WHERE 1=1
+	`
+	args := []interface{}{}
+	
+	// Apply filters
+	if filter != nil {
+		if filter.Status != "" {
+			query += " AND status = ?"
+			args = append(args, filter.Status)
+		}
+		if filter.NamePattern != "" {
+			query += " AND name LIKE ?"
+			args = append(args, "%"+filter.NamePattern+"%")
+		}
+		if filter.CreatedBy != "" {
+			query += " AND created_by = ?"
+			args = append(args, filter.CreatedBy)
+		}
+		if filter.CreatedAfter != nil {
+			query += " AND created_at > ?"
+			args = append(args, filter.CreatedAfter)
+		}
+	}
+	
+	query += " ORDER BY created_at DESC"
+	
+	// Apply limit and offset
+	if filter != nil {
+		if filter.Limit > 0 {
+			query += " LIMIT ?"
+			args = append(args, filter.Limit)
+		}
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+	
+	rows, err := b.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var secrets []*Secret
+	for rows.Next() {
+		var secret Secret
+		var metadataJSON, tagsJSON string
+		
+		err := rows.Scan(
+			&secret.ID, &secret.Name, &secret.KeyID, &metadataJSON, &tagsJSON,
+			&secret.CreatedAt, &secret.UpdatedAt, &secret.ExpiresAt,
+			&secret.RotationDue, &secret.Version, &secret.CreatedBy,
+			&secret.AccessCount, &secret.LastAccessed, &secret.Status,
+		)
+		if err != nil {
+			continue
+		}
+		
+		json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+		json.Unmarshal([]byte(tagsJSON), &secret.Tags)
+		
+		secrets = append(secrets, &secret)
+	}
+	
+	return secrets, nil
 }
 
 func (b *MySQLBackend) HealthCheck(ctx context.Context) error {
@@ -679,9 +968,11 @@ func (b *MySQLBackend) Close() error {
 }
 
 func (b *MySQLBackend) Backup(ctx context.Context, destination string) error {
-	return fmt.Errorf("backup not implemented for MySQL backend")
+	// MySQL backup using mysqldump
+	return fmt.Errorf("MySQL backup requires mysqldump - use BackupManager instead")
 }
 
 func (b *MySQLBackend) Restore(ctx context.Context, source string) error {
-	return fmt.Errorf("restore not implemented for MySQL backend")
+	// MySQL restore using mysql client
+	return fmt.Errorf("MySQL restore requires mysql client - use BackupManager instead")
 }

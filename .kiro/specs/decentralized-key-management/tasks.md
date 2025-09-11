@@ -57,7 +57,7 @@
   - Write tests for notification delivery and alert triggering
   - _Requirements: 4.5, 5.2, 6.3_
 
-- [ ] 4. Build storage abstraction layer
+- [x] 4. Build storage abstraction layer
   - Create storage interface supporting SQLite, PostgreSQL, and MySQL backends
   - Implement database migrations with version control and rollback support
   - Add connection pooling and health checking for database connections
@@ -66,7 +66,7 @@
   - Write integration tests for all supported database backends
   - _Requirements: 1.1, 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 4.1 Implement high-availability and clustering support
+- [x] 4.1 Implement high-availability and clustering support
   - Add support for multiple vault agent instances with shared storage
   - Implement leader election for coordination of background tasks
   - Create health checking and failover mechanisms
