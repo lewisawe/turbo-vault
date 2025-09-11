@@ -1,0 +1,17 @@
+database:
+  type: sqlite
+  path: ./data/vault.db
+
+control_plane:
+  url: https://api.keyvault.com
+  cert_file: ./config/client.crt
+  key_file: ./config/client.key
+
+security:
+  master_key_file: ./config/master.key
+  rotation_interval: 30d
+  backup_enabled: true
+
+logging:
+  level: info
+  file: ./data/agent.log
