@@ -1,13 +1,13 @@
 # Implementation Plan
 
-- [-] 1. Enhance core vault agent infrastructure
+- [x] 1. Enhance core vault agent infrastructure
   - Refactor existing codebase to support pluggable storage backends (SQLite, PostgreSQL, MySQL)
   - Implement configuration management system with YAML parsing and environment variable override support
   - Add structured logging framework with configurable levels, formats, and output destinations
   - Create offline mode detection and graceful degradation when control plane is unavailable
   - _Requirements: 1.1, 1.4, 1.5_
 
-- [ ] 1.1 Implement advanced encryption and key management
+- [x] 1.1 Implement advanced encryption and key management
   - Create key management service interface supporting file-based, HSM, and cloud KMS backends
   - Implement AES-256-GCM encryption with customer-managed keys and secure key derivation
   - Add automatic key rotation with backward compatibility for decrypting existing secrets
@@ -15,7 +15,7 @@
   - Write comprehensive unit tests for all cryptographic operations and edge cases
   - _Requirements: 2.1, 2.3, 2.5_
 
-- [ ] 1.2 Build comprehensive audit logging system
+- [x] 1.2 Build comprehensive audit logging system
   - Implement structured audit event logging with JSON format
   - Create audit event types for all secret operations (create, read, update, delete, rotate)
   - Add log rotation and retention policies with configurable size and time limits
