@@ -5,24 +5,27 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 	"github.com/keyvault/agent/internal/audit"
 	"github.com/keyvault/agent/internal/crypto"
+	"github.com/keyvault/agent/internal/notification"
+	"github.com/keyvault/agent/internal/rotation"
 )
 
 // Config represents the complete vault agent configuration
 type Config struct {
-	Server       ServerConfig       `yaml:"server" json:"server"`
-	Database     DatabaseConfig     `yaml:"database" json:"database"`
-	ControlPlane ControlPlaneConfig `yaml:"control_plane" json:"control_plane"`
-	Security     SecurityConfig     `yaml:"security" json:"security"`
-	Logging      LoggingConfig      `yaml:"logging" json:"logging"`
-	Audit        audit.AuditConfig  `yaml:"audit" json:"audit"`
-	KeyManager   crypto.KeyManagerConfig `yaml:"key_manager" json:"key_manager"`
-	Performance  PerformanceConfig  `yaml:"performance" json:"performance"`
+	Server       ServerConfig                    `yaml:"server" json:"server"`
+	Database     DatabaseConfig                 `yaml:"database" json:"database"`
+	ControlPlane ControlPlaneConfig             `yaml:"control_plane" json:"control_plane"`
+	Security     SecurityConfig                 `yaml:"security" json:"security"`
+	Logging      LoggingConfig                  `yaml:"logging" json:"logging"`
+	Audit        audit.AuditConfig              `yaml:"audit" json:"audit"`
+	KeyManager   crypto.KeyManagerConfig        `yaml:"key_manager" json:"key_manager"`
+	Performance  PerformanceConfig              `yaml:"performance" json:"performance"`
+	Notification *notification.NotificationConfig `yaml:"notification" json:"notification"`
+	Rotation     *rotation.RotationConfig      `yaml:"rotation" json:"rotation"`
 }
 
 // ServerConfig contains HTTP server configuration
@@ -269,6 +272,8 @@ func DefaultConfig() *Config {
 		},
 		Audit: *audit.DefaultAuditConfig("./logs/audit"),
 		KeyManager: *crypto.DefaultKeyManagerConfig("./keys"),
+		Notification: notification.DefaultNotificationConfig(),
+		Rotation: rotation.DefaultRotationConfig(),
 		Performance: PerformanceConfig{
 			Cache: CacheConfig{
 				Enabled: true,
