@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  vault-agent:
+    build: ./vault-agent
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/vault.db
+      - MASTER_KEY_FILE=/app/config/master.key
+      - CONTROL_PLANE_URL=https://api.keyvault.com
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Add a simple web UI for testing
+  vault-ui:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./web:/usr/share/nginx/html
+    depends_on:
+      - vault-agent

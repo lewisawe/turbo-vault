@@ -1,0 +1,116 @@
+# Binaries and executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+keyvault-*
+vault-agent
+control-plane
+cli-tool
+
+# Go specific
+*.test
+*.prof
+*.out
+go.work
+go.work.sum
+
+# Build artifacts
+/build/
+/dist/
+/bin/
+/target/
+
+# Dependencies
+/vendor/
+node_modules/
+.pnp
+.pnp.js
+
+# Environment and configuration
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+config.yaml
+config.json
+.config/
+
+# Secrets and keys
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+keys/
+certs/
+.secrets/
+registration-token*
+api-keys*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+/data/
+postgres-data/
+
+# Logs
+*.log
+logs/
+/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and testing
+coverage/
+.nyc_output
+.coverage
+*.cover
+*.py,cover
+htmlcov/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.temp/
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.old
