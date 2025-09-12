@@ -1,0 +1,150 @@
+{
+  "id": "network-security-policy-template-v1",
+  "name": "Network Security Policy Template",
+  "category": "network",
+  "description": "Template for implementing zero-trust network security policies",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "net-001",
+      "name": "Zero-Trust Network Architecture",
+      "description": "Implement zero-trust principles for all network communications",
+      "condition": "network.zero_trust_enabled == true",
+      "action": "enforce",
+      "parameters": ["network.zero_trust_enabled"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "NIST"],
+        "severity": "critical"
+      }
+    },
+    {
+      "id": "net-002",
+      "name": "Mutual TLS Authentication",
+      "description": "Require mTLS for all service-to-service communication",
+      "condition": "network.mtls_required == true",
+      "action": "enforce",
+      "parameters": ["network.mtls_required"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "net-003",
+      "name": "Network Segmentation",
+      "description": "Implement network segmentation and micro-segmentation",
+      "condition": "network.segmentation_enabled == true",
+      "action": "enforce",
+      "parameters": ["network.segmentation_enabled"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "net-004",
+      "name": "Certificate-Based Device Authentication",
+      "description": "Require certificate-based authentication for all devices",
+      "condition": "network.certificate_auth_required == true",
+      "action": "enforce",
+      "parameters": ["network.certificate_auth_required"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "net-005",
+      "name": "Network Traffic Monitoring",
+      "description": "Enable comprehensive network traffic monitoring",
+      "condition": "network.traffic_monitoring == true",
+      "action": "enforce",
+      "parameters": ["network.traffic_monitoring"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "net-006",
+      "name": "Intrusion Detection System",
+      "description": "Deploy network intrusion detection and prevention",
+      "condition": "network.ids_enabled == true",
+      "action": "enforce",
+      "parameters": ["network.ids_enabled"],
+      "required": false,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "net-007",
+      "name": "DDoS Protection",
+      "description": "Implement DDoS protection mechanisms",
+      "condition": "network.ddos_protection == true",
+      "action": "enforce",
+      "parameters": ["network.ddos_protection"],
+      "required": false,
+      "metadata": {
+        "compliance": ["SOC2"],
+        "severity": "low"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "network.zero_trust_enabled",
+      "type": "boolean",
+      "description": "Whether zero-trust networking is enabled",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "network.mtls_required",
+      "type": "boolean",
+      "description": "Whether mTLS is required for all communications",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "network.segmentation_enabled",
+      "type": "boolean",
+      "description": "Whether network segmentation is enabled",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "network.certificate_auth_required",
+      "type": "boolean",
+      "description": "Whether certificate-based authentication is required",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "network.traffic_monitoring",
+      "type": "boolean",
+      "description": "Whether network traffic monitoring is enabled",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    }
+  ],
+  "metadata": {
+    "author": "VaultAgent Security Team",
+    "compliance_standards": ["SOC2", "ISO27001", "PCI-DSS", "NIST"],
+    "risk_level": "high",
+    "implementation_effort": "high"
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}

@@ -1,0 +1,280 @@
+stages:
+  - test
+  - security
+  - build
+  - deploy-staging
+  - integration-test
+  - deploy-production
+  - smoke-test
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  REGISTRY: $CI_REGISTRY
+  IMAGE_NAME: $CI_REGISTRY_IMAGE/vault-agent
+  KUBECONFIG: /tmp/kubeconfig
+
+# Global before script
+before_script:
+  - echo "Starting CI/CD pipeline for commit $CI_COMMIT_SHORT_SHA"
+
+# Test stage
+unit-tests:
+  stage: test
+  image: golang:1.21-alpine
+  services:
+    - postgres:15-alpine
+    - redis:7-alpine
+  variables:
+    POSTGRES_DB: vault_agent_test
+    POSTGRES_USER: test
+    POSTGRES_PASSWORD: test
+    REDIS_URL: redis://redis:6379
+  before_script:
+    - apk add --no-cache git make
+    - cd vault-agent
+    - go mod download
+  script:
+    - go test -v -race -coverprofile=coverage.out ./...
+    - go tool cover -html=coverage.out -o coverage.html
+  coverage: '/coverage: \d+\.\d+% of statements/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: vault-agent/coverage.xml
+    paths:
+      - vault-agent/coverage.html
+      - vault-agent/coverage.out
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+lint:
+  stage: test
+  image: golangci/golangci-lint:v1.54-alpine
+  script:
+    - cd vault-agent
+    - golangci-lint run --out-format code-climate > gl-code-quality-report.json
+  artifacts:
+    reports:
+      codequality: vault-agent/gl-code-quality-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+# Security stage
+security-scan:
+  stage: security
+  image: securecodewarrior/docker-action-add-sarif:latest
+  script:
+    - cd vault-agent
+    - gosec -fmt json -out gosec-report.json ./...
+    - govulncheck ./...
+  artifacts:
+    reports:
+      sast: vault-agent/gosec-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+# Build stage
+build-image:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker buildx create --use --name multiarch-builder
+  script:
+    - cd vault-agent
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA \
+        --tag $IMAGE_NAME:latest \
+        --file Dockerfile.multi-arch \
+        --push \
+        .
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+
+container-scan:
+  stage: security
+  image: aquasec/trivy:latest
+  needs: ["build-image"]
+  script:
+    - trivy image --format template --template "@contrib/sarif.tpl" -o trivy-report.sarif $IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL $IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+  artifacts:
+    reports:
+      sast: trivy-report.sarif
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+# Deploy to staging
+deploy-staging:
+  stage: deploy-staging
+  image: alpine/helm:3.12.0
+  needs: ["build-image", "unit-tests"]
+  environment:
+    name: staging
+    url: https://vault-agent-staging.example.com
+  before_script:
+    - apk add --no-cache curl
+    - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    - chmod +x kubectl && mv kubectl /usr/local/bin/
+    - echo "$KUBE_CONFIG_STAGING" | base64 -d > $KUBECONFIG
+  script:
+    - |
+      helm upgrade --install vault-agent-staging ./deployments/helm/vault-agent \
+        --namespace vault-agent-staging \
+        --create-namespace \
+        --set image.tag=$CI_COMMIT_SHORT_SHA \
+        --set environment=staging \
+        --set replicaCount=2 \
+        --values ./deployments/helm/vault-agent/values-staging.yaml \
+        --wait --timeout=10m
+    - kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault-agent -n vault-agent-staging --timeout=300s
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+
+# Integration tests
+integration-tests:
+  stage: integration-test
+  image: golang:1.21-alpine
+  needs: ["deploy-staging"]
+  environment:
+    name: staging
+  before_script:
+    - apk add --no-cache curl kubectl
+    - echo "$KUBE_CONFIG_STAGING" | base64 -d > $KUBECONFIG
+  script:
+    - cd vault-agent
+    - kubectl port-forward -n vault-agent-staging svc/vault-agent 8200:8200 &
+    - sleep 10
+    - curl -f http://localhost:8200/health
+    - go test -v -tags=integration ./tests/integration/...
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# Deploy to production
+deploy-production:
+  stage: deploy-production
+  image: alpine/helm:3.12.0
+  needs: ["integration-tests", "container-scan"]
+  environment:
+    name: production
+    url: https://vault-agent.example.com
+  before_script:
+    - apk add --no-cache curl
+    - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    - chmod +x kubectl && mv kubectl /usr/local/bin/
+    - echo "$KUBE_CONFIG_PRODUCTION" | base64 -d > $KUBECONFIG
+  script:
+    - |
+      helm upgrade --install vault-agent-prod ./deployments/helm/vault-agent \
+        --namespace vault-agent-prod \
+        --create-namespace \
+        --set image.tag=$CI_COMMIT_SHORT_SHA \
+        --set environment=production \
+        --set replicaCount=5 \
+        --values ./deployments/helm/vault-agent/values-production.yaml \
+        --wait --timeout=15m
+    - kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault-agent -n vault-agent-prod --timeout=600s
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# Smoke tests
+smoke-tests:
+  stage: smoke-test
+  image: golang:1.21-alpine
+  needs: ["deploy-production"]
+  environment:
+    name: production
+  before_script:
+    - apk add --no-cache curl kubectl
+    - echo "$KUBE_CONFIG_PRODUCTION" | base64 -d > $KUBECONFIG
+  script:
+    - cd vault-agent
+    - kubectl port-forward -n vault-agent-prod svc/vault-agent 8200:8200 &
+    - sleep 15
+    - curl -f http://localhost:8200/health
+    - curl -f http://localhost:8200/metrics
+    - curl -f http://localhost:8200/ready
+    - go test -v -tags=smoke ./tests/smoke/...
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# Rollback job (manual)
+rollback-production:
+  stage: deploy-production
+  image: alpine/helm:3.12.0
+  environment:
+    name: production
+  before_script:
+    - apk add --no-cache curl
+    - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    - chmod +x kubectl && mv kubectl /usr/local/bin/
+    - echo "$KUBE_CONFIG_PRODUCTION" | base64 -d > $KUBECONFIG
+  script:
+    - helm rollback vault-agent-prod -n vault-agent-prod
+    - kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault-agent -n vault-agent-prod --timeout=600s
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  needs: []
+
+# Notification jobs
+notify-success:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\":white_check_mark: Vault Agent deployment successful!\n*Branch:* $CI_COMMIT_REF_NAME\n*Commit:* $CI_COMMIT_SHORT_SHA\n*Pipeline:* $CI_PIPELINE_URL\"}" \
+        $SLACK_WEBHOOK_URL
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: on_success
+
+notify-failure:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\":x: Vault Agent deployment failed!\n*Branch:* $CI_COMMIT_REF_NAME\n*Commit:* $CI_COMMIT_SHORT_SHA\n*Pipeline:* $CI_PIPELINE_URL\"}" \
+        $SLACK_WEBHOOK_URL
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: on_failure
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: on_failure

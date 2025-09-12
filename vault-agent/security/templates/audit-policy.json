@@ -1,0 +1,171 @@
+{
+  "id": "audit-policy-template-v1",
+  "name": "Audit and Logging Security Policy Template",
+  "category": "audit",
+  "description": "Template for implementing comprehensive audit and logging security policies",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "aud-001",
+      "name": "Comprehensive Event Logging",
+      "description": "Log all security-relevant events",
+      "condition": "audit.events CONTAINS ['auth', 'access', 'modify', 'delete', 'admin']",
+      "action": "enforce",
+      "parameters": ["audit.events"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+        "severity": "critical"
+      }
+    },
+    {
+      "id": "aud-002",
+      "name": "Log Integrity Protection",
+      "description": "Protect audit logs from tampering",
+      "condition": "audit.integrity_protection == true",
+      "action": "enforce",
+      "parameters": ["audit.integrity_protection"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "aud-003",
+      "name": "Log Retention Policy",
+      "description": "Maintain logs for required retention period",
+      "condition": "audit.retention_period >= 7y",
+      "action": "enforce",
+      "parameters": ["audit.retention_period"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "aud-004",
+      "name": "Real-time Monitoring",
+      "description": "Enable real-time security event monitoring",
+      "condition": "audit.real_time_monitoring == true",
+      "action": "enforce",
+      "parameters": ["audit.real_time_monitoring"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "aud-005",
+      "name": "Log Format Standardization",
+      "description": "Use structured logging format",
+      "condition": "audit.format IN ['json', 'syslog', 'cef']",
+      "action": "enforce",
+      "parameters": ["audit.format"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "aud-006",
+      "name": "Log Rotation and Archival",
+      "description": "Implement proper log rotation and archival",
+      "condition": "audit.rotation_enabled == true AND audit.archive_enabled == true",
+      "action": "enforce",
+      "parameters": ["audit.rotation_enabled", "audit.archive_enabled"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "aud-007",
+      "name": "Sensitive Data Masking",
+      "description": "Mask sensitive data in audit logs",
+      "condition": "audit.data_masking == true",
+      "action": "enforce",
+      "parameters": ["audit.data_masking"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "aud-008",
+      "name": "Log Access Control",
+      "description": "Restrict access to audit logs",
+      "condition": "audit.access_control == 'restricted'",
+      "action": "enforce",
+      "parameters": ["audit.access_control"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "high"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "audit.events",
+      "type": "array",
+      "description": "List of events to audit",
+      "default_value": ["auth", "access", "modify", "delete", "admin"],
+      "required": true,
+      "validation": "^\\[.*\\]$"
+    },
+    {
+      "name": "audit.integrity_protection",
+      "type": "boolean",
+      "description": "Whether to enable log integrity protection",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "audit.retention_period",
+      "type": "duration",
+      "description": "Log retention period",
+      "default_value": "7y",
+      "required": true,
+      "validation": "^[0-9]+(y|m|d)$"
+    },
+    {
+      "name": "audit.real_time_monitoring",
+      "type": "boolean",
+      "description": "Whether to enable real-time monitoring",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "audit.format",
+      "type": "string",
+      "description": "Audit log format",
+      "default_value": "json",
+      "required": true,
+      "validation": "^(json|syslog|cef)$"
+    },
+    {
+      "name": "audit.data_masking",
+      "type": "boolean",
+      "description": "Whether to mask sensitive data in logs",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    }
+  ],
+  "metadata": {
+    "author": "VaultAgent Security Team",
+    "compliance_standards": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+    "risk_level": "high",
+    "implementation_effort": "low"
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}

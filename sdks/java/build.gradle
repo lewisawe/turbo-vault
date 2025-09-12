@@ -1,0 +1,155 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'jacoco'
+    id 'org.springframework.boot' version '3.2.0' apply false
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.vaultagent'
+version = '1.0.0'
+description = 'Official Java SDK for Vault Agent'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    withSourcesJar()
+    withJavadocJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+    }
+}
+
+dependencies {
+    // HTTP Client
+    api 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // JSON Processing
+    api 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
+    api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.16.0'
+    
+    // Logging
+    api 'org.slf4j:slf4j-api:2.0.9'
+    
+    // Caching
+    api 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    
+    // JWT
+    api 'io.jsonwebtoken:jjwt-api:0.12.3'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+    
+    // Spring Boot Integration (Optional)
+    compileOnly 'org.springframework:spring-context'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    
+    // Reactive Programming Support (Optional)
+    compileOnly 'io.projectreactor:reactor-core'
+    
+    // Cloud Provider SDKs (Optional)
+    compileOnly 'software.amazon.awssdk:secretsmanager:2.21.29'
+    compileOnly 'com.azure:azure-security-keyvault-secrets:4.7.3'
+    compileOnly 'com.google.cloud:google-cloud-secretmanager:2.29.0'
+
+    // Test Dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+    testImplementation 'com.github.tomakehurst:wiremock-jre8:3.3.1'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+    testRuntimeOnly 'ch.qos.logback:logback-classic:1.4.14'
+}
+
+test {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            
+            pom {
+                name = 'Vault Agent Java SDK'
+                description = 'Official Java SDK for Vault Agent'
+                url = 'https://github.com/vault-agent/java-sdk'
+                
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                
+                developers {
+                    developer {
+                        name = 'Vault Agent Team'
+                        email = 'support@vault-agent.com'
+                        organization = 'Vault Agent'
+                        organizationUrl = 'https://vault-agent.com'
+                    }
+                }
+                
+                scm {
+                    connection = 'scm:git:git://github.com/vault-agent/java-sdk.git'
+                    developerConnection = 'scm:git:ssh://github.com:vault-agent/java-sdk.git'
+                    url = 'http://github.com/vault-agent/java-sdk/tree/main'
+                }
+            }
+        }
+    }
+    
+    repositories {
+        maven {
+            name = "OSSRH"
+            url = version.endsWith('SNAPSHOT') ? 
+                "https://s01.oss.sonatype.org/content/repositories/snapshots/" : 
+                "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username = project.findProperty("ossrhUsername") ?: System.getenv("OSSRH_USERNAME")
+                password = project.findProperty("ossrhPassword") ?: System.getenv("OSSRH_PASSWORD")
+            }
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.maven
+}
+
+// Spring Boot configuration class generation
+configurations {
+    configurationProcessor
+}
+
+dependencies {
+    configurationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+}
+
+compileJava {
+    inputs.files(configurations.configurationProcessor)
+}

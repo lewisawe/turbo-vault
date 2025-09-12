@@ -1,0 +1,129 @@
+{
+  "id": "encryption-policy-template-v1",
+  "name": "Encryption Security Policy Template",
+  "category": "encryption",
+  "description": "Template for implementing comprehensive encryption security policies",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "enc-001",
+      "name": "Strong Encryption Algorithm",
+      "description": "Require AES-256-GCM or equivalent strong encryption",
+      "condition": "encryption.algorithm IN ['AES-256-GCM', 'ChaCha20-Poly1305']",
+      "action": "enforce",
+      "parameters": ["encryption.algorithm"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "critical"
+      }
+    },
+    {
+      "id": "enc-002",
+      "name": "Key Size Requirements",
+      "description": "Enforce minimum key sizes for cryptographic operations",
+      "condition": "encryption.key_size >= 256",
+      "action": "enforce",
+      "parameters": ["encryption.key_size"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "enc-003",
+      "name": "Key Rotation Policy",
+      "description": "Require regular key rotation",
+      "condition": "encryption.key_rotation_interval <= 90d",
+      "action": "enforce",
+      "parameters": ["encryption.key_rotation_interval"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "enc-004",
+      "name": "Secure Key Storage",
+      "description": "Require secure key storage mechanisms",
+      "condition": "encryption.key_storage IN ['hsm', 'kms', 'encrypted_file']",
+      "action": "enforce",
+      "parameters": ["encryption.key_storage"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "critical"
+      }
+    },
+    {
+      "id": "enc-005",
+      "name": "Encryption at Rest",
+      "description": "Require encryption for all data at rest",
+      "condition": "storage.encryption_enabled == true",
+      "action": "enforce",
+      "parameters": ["storage.encryption_enabled"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+        "severity": "critical"
+      }
+    },
+    {
+      "id": "enc-006",
+      "name": "Encryption in Transit",
+      "description": "Require TLS 1.2+ for all communications",
+      "condition": "network.tls_version >= 'TLS1.2'",
+      "action": "enforce",
+      "parameters": ["network.tls_version"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "critical"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "encryption.algorithm",
+      "type": "string",
+      "description": "Encryption algorithm to use",
+      "default_value": "AES-256-GCM",
+      "required": true,
+      "validation": "^(AES-256-GCM|ChaCha20-Poly1305)$"
+    },
+    {
+      "name": "encryption.key_size",
+      "type": "integer",
+      "description": "Encryption key size in bits",
+      "default_value": 256,
+      "required": true,
+      "validation": "^(256|384|512)$"
+    },
+    {
+      "name": "encryption.key_rotation_interval",
+      "type": "duration",
+      "description": "Key rotation interval",
+      "default_value": "90d",
+      "required": true,
+      "validation": "^[0-9]+(d|h|m)$"
+    },
+    {
+      "name": "encryption.key_storage",
+      "type": "string",
+      "description": "Key storage mechanism",
+      "default_value": "hsm",
+      "required": true,
+      "validation": "^(hsm|kms|encrypted_file)$"
+    }
+  ],
+  "metadata": {
+    "author": "VaultAgent Security Team",
+    "compliance_standards": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+    "risk_level": "critical",
+    "implementation_effort": "medium"
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}

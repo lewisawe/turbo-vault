@@ -1,0 +1,362 @@
+pipeline {
+    agent any
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        ansiColor('xterm')
+    }
+    
+    environment {
+        REGISTRY = 'docker.io'
+        IMAGE_NAME = 'vault-agent/vault-agent'
+        KUBECONFIG = credentials('kubeconfig')
+        DOCKER_REGISTRY_CREDS = credentials('docker-registry')
+        AWS_CREDENTIALS = credentials('aws-credentials')
+        SLACK_WEBHOOK = credentials('slack-webhook')
+    }
+    
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['staging', 'production'],
+            description: 'Environment to deploy to'
+        )
+        booleanParam(
+            name: 'FORCE_DEPLOY',
+            defaultValue: false,
+            description: 'Force deployment even if tests fail'
+        )
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Skip running tests'
+        )
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.BUILD_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+        
+        stage('Setup') {
+            parallel {
+                stage('Go Setup') {
+                    steps {
+                        sh '''
+                            go version
+                            cd vault-agent
+                            go mod download
+                            go mod verify
+                        '''
+                    }
+                }
+                stage('Docker Setup') {
+                    steps {
+                        sh '''
+                            docker --version
+                            docker buildx version
+                            echo $DOCKER_REGISTRY_CREDS_PSW | docker login -u $DOCKER_REGISTRY_CREDS_USR --password-stdin $REGISTRY
+                        '''
+                    }
+                }
+                stage('Kubernetes Setup') {
+                    steps {
+                        sh '''
+                            kubectl version --client
+                            helm version
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Test') {
+            when {
+                not { params.SKIP_TESTS }
+            }
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        dir('vault-agent') {
+                            sh '''
+                                go test -v -race -coverprofile=coverage.out ./...
+                                go tool cover -html=coverage.out -o coverage.html
+                            '''
+                        }
+                        publishHTML([
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: true,
+                            keepAll: true,
+                            reportDir: 'vault-agent',
+                            reportFiles: 'coverage.html',
+                            reportName: 'Coverage Report'
+                        ])
+                    }
+                }
+                stage('Security Scan') {
+                    steps {
+                        dir('vault-agent') {
+                            sh '''
+                                # Run gosec security scanner
+                                gosec -fmt json -out gosec-report.json ./...
+                                
+                                # Run govulncheck
+                                govulncheck ./...
+                            '''
+                        }
+                        archiveArtifacts artifacts: 'vault-agent/gosec-report.json', fingerprint: true
+                    }
+                }
+                stage('Lint') {
+                    steps {
+                        dir('vault-agent') {
+                            sh '''
+                                golangci-lint run --out-format checkstyle > golangci-lint-report.xml
+                            '''
+                        }
+                        recordIssues(
+                            enabledForFailure: true,
+                            tools: [checkStyle(pattern: 'vault-agent/golangci-lint-report.xml')]
+                        )
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if (!params.FORCE_DEPLOY) {
+                            error("Tests failed and FORCE_DEPLOY is not enabled")
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    def imageTag = "${env.REGISTRY}/${env.IMAGE_NAME}:${env.BUILD_TAG}"
+                    def latestTag = "${env.REGISTRY}/${env.IMAGE_NAME}:latest"
+                    
+                    sh """
+                        cd vault-agent
+                        docker buildx build \\
+                            --platform linux/amd64,linux/arm64 \\
+                            --tag ${imageTag} \\
+                            --tag ${latestTag} \\
+                            --file Dockerfile.multi-arch \\
+                            --push \\
+                            .
+                    """
+                    
+                    env.IMAGE_TAG = imageTag
+                }
+            }
+        }
+        
+        stage('Security Scan Image') {
+            steps {
+                sh """
+                    # Scan the built image with Trivy
+                    trivy image --format json --output trivy-report.json ${env.IMAGE_TAG}
+                    
+                    # Check for HIGH and CRITICAL vulnerabilities
+                    trivy image --exit-code 1 --severity HIGH,CRITICAL ${env.IMAGE_TAG}
+                """
+                archiveArtifacts artifacts: 'trivy-report.json', fingerprint: true
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    expression { params.ENVIRONMENT == 'staging' }
+                }
+            }
+            steps {
+                script {
+                    deployToEnvironment('staging', 2)
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    expression { params.ENVIRONMENT == 'staging' }
+                }
+            }
+            steps {
+                dir('vault-agent') {
+                    sh '''
+                        # Wait for deployment to be ready
+                        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault-agent -n vault-agent-staging --timeout=300s
+                        
+                        # Run integration tests
+                        go test -v -tags=integration ./tests/integration/...
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy to Production') {
+            when {
+                anyOf {
+                    branch 'main'
+                    expression { params.ENVIRONMENT == 'production' }
+                }
+            }
+            steps {
+                script {
+                    // Require manual approval for production deployments
+                    input message: 'Deploy to production?', ok: 'Deploy',
+                          submitterParameter: 'DEPLOYER'
+                    
+                    deployToEnvironment('production', 5)
+                }
+            }
+        }
+        
+        stage('Smoke Tests') {
+            when {
+                anyOf {
+                    branch 'main'
+                    expression { params.ENVIRONMENT == 'production' }
+                }
+            }
+            steps {
+                dir('vault-agent') {
+                    sh '''
+                        # Wait for production deployment to be ready
+                        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault-agent -n vault-agent-prod --timeout=600s
+                        
+                        # Run smoke tests
+                        go test -v -tags=smoke ./tests/smoke/...
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Clean up
+            sh 'docker system prune -f'
+            
+            // Archive artifacts
+            archiveArtifacts artifacts: 'vault-agent/coverage.out', allowEmptyArchive: true
+            
+            // Publish test results
+            publishTestResults testResultsPattern: 'vault-agent/test-results.xml'
+        }
+        
+        success {
+            script {
+                def message = """
+                :white_check_mark: *Vault Agent Deployment Successful*
+                
+                *Branch:* ${env.BRANCH_NAME}
+                *Build:* ${env.BUILD_NUMBER}
+                *Commit:* ${env.GIT_COMMIT_SHORT}
+                *Environment:* ${params.ENVIRONMENT}
+                *Deployer:* ${env.DEPLOYER ?: 'Automated'}
+                
+                *Image:* `${env.IMAGE_TAG}`
+                """
+                
+                slackSend(
+                    channel: '#deployments',
+                    color: 'good',
+                    message: message,
+                    teamDomain: 'your-team',
+                    token: env.SLACK_WEBHOOK
+                )
+            }
+        }
+        
+        failure {
+            script {
+                def message = """
+                :x: *Vault Agent Deployment Failed*
+                
+                *Branch:* ${env.BRANCH_NAME}
+                *Build:* ${env.BUILD_NUMBER}
+                *Commit:* ${env.GIT_COMMIT_SHORT}
+                *Stage:* ${env.STAGE_NAME}
+                
+                *Build URL:* ${env.BUILD_URL}
+                """
+                
+                slackSend(
+                    channel: '#deployments',
+                    color: 'danger',
+                    message: message,
+                    teamDomain: 'your-team',
+                    token: env.SLACK_WEBHOOK
+                )
+            }
+            
+            // Auto-rollback production on failure
+            script {
+                if (params.ENVIRONMENT == 'production' || env.BRANCH_NAME == 'main') {
+                    try {
+                        sh '''
+                            helm rollback vault-agent-prod -n vault-agent-prod
+                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault-agent -n vault-agent-prod --timeout=600s
+                        '''
+                        
+                        slackSend(
+                            channel: '#deployments',
+                            color: 'warning',
+                            message: ':warning: Production deployment rolled back automatically',
+                            teamDomain: 'your-team',
+                            token: env.SLACK_WEBHOOK
+                        )
+                    } catch (Exception e) {
+                        slackSend(
+                            channel: '#deployments',
+                            color: 'danger',
+                            message: ':rotating_light: CRITICAL: Production rollback failed! Manual intervention required.',
+                            teamDomain: 'your-team',
+                            token: env.SLACK_WEBHOOK
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+def deployToEnvironment(environment, replicas) {
+    sh """
+        # Update kubeconfig for the environment
+        aws eks update-kubeconfig --region us-west-2 --name vault-agent-${environment}-cluster
+        
+        # Deploy using Helm
+        helm upgrade --install vault-agent-${environment} ./deployments/helm/vault-agent \\
+            --namespace vault-agent-${environment} \\
+            --create-namespace \\
+            --set image.tag=${env.BUILD_TAG} \\
+            --set environment=${environment} \\
+            --set replicaCount=${replicas} \\
+            --values ./deployments/helm/vault-agent/values-${environment}.yaml \\
+            --wait --timeout=15m
+        
+        # Verify deployment
+        kubectl get pods -n vault-agent-${environment}
+        kubectl get svc -n vault-agent-${environment}
+    """
+}

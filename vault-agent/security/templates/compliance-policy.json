@@ -1,0 +1,163 @@
+{
+  "id": "compliance-policy-template-v1",
+  "name": "Compliance Security Policy Template",
+  "category": "compliance",
+  "description": "Template for implementing regulatory compliance security policies",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "comp-001",
+      "name": "Data Classification",
+      "description": "Implement data classification and handling procedures",
+      "condition": "compliance.data_classification_enabled == true",
+      "action": "enforce",
+      "parameters": ["compliance.data_classification_enabled"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "HIPAA", "GDPR"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "comp-002",
+      "name": "Privacy Controls",
+      "description": "Implement privacy protection controls",
+      "condition": "compliance.privacy_controls == true",
+      "action": "enforce",
+      "parameters": ["compliance.privacy_controls"],
+      "required": true,
+      "metadata": {
+        "compliance": ["GDPR", "HIPAA", "CCPA"],
+        "severity": "critical"
+      }
+    },
+    {
+      "id": "comp-003",
+      "name": "Data Retention Policy",
+      "description": "Implement data retention and disposal policies",
+      "condition": "compliance.data_retention_policy == true",
+      "action": "enforce",
+      "parameters": ["compliance.data_retention_policy"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "GDPR", "HIPAA"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "comp-004",
+      "name": "Incident Response Plan",
+      "description": "Maintain documented incident response procedures",
+      "condition": "compliance.incident_response_plan == true",
+      "action": "enforce",
+      "parameters": ["compliance.incident_response_plan"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "comp-005",
+      "name": "Vulnerability Management",
+      "description": "Implement vulnerability management program",
+      "condition": "compliance.vulnerability_management == true",
+      "action": "enforce",
+      "parameters": ["compliance.vulnerability_management"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "comp-006",
+      "name": "Change Management",
+      "description": "Implement change management controls",
+      "condition": "compliance.change_management == true",
+      "action": "enforce",
+      "parameters": ["compliance.change_management"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "comp-007",
+      "name": "Business Continuity Plan",
+      "description": "Maintain business continuity and disaster recovery plans",
+      "condition": "compliance.business_continuity_plan == true",
+      "action": "enforce",
+      "parameters": ["compliance.business_continuity_plan"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "comp-008",
+      "name": "Third-Party Risk Management",
+      "description": "Implement third-party risk assessment and management",
+      "condition": "compliance.third_party_risk_management == true",
+      "action": "enforce",
+      "parameters": ["compliance.third_party_risk_management"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "compliance.data_classification_enabled",
+      "type": "boolean",
+      "description": "Whether data classification is enabled",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "compliance.privacy_controls",
+      "type": "boolean",
+      "description": "Whether privacy controls are implemented",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "compliance.data_retention_policy",
+      "type": "boolean",
+      "description": "Whether data retention policy is implemented",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "compliance.incident_response_plan",
+      "type": "boolean",
+      "description": "Whether incident response plan is documented",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "compliance.vulnerability_management",
+      "type": "boolean",
+      "description": "Whether vulnerability management is implemented",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    }
+  ],
+  "metadata": {
+    "author": "VaultAgent Security Team",
+    "compliance_standards": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA", "GDPR", "CCPA"],
+    "risk_level": "high",
+    "implementation_effort": "high"
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}
