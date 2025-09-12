@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -144,8 +146,9 @@ func NewStorage(cfg *config.DatabaseConfig, cryptoService *crypto.CryptoService)
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	// Initialize backup manager
-	storage.backupManager = NewBackupManager(storage, db, cryptoService.Encryptor(), keyID)
+	// Initialize backup manager with logger
+	logger := log.New(os.Stdout, "backup: ", log.LstdFlags)
+	storage.backupManager = NewBackupManager(storage, cryptoService.Encryptor(), keyID, logger)
 
 	// Initialize performance monitor
 	storage.performanceMonitor = NewPerformanceMonitor(db, cfg.Type)
