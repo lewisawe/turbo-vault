@@ -16,6 +16,7 @@ import (
 	"github.com/keyvault/agent/internal/config"
 	"github.com/keyvault/agent/internal/controlplane"
 	"github.com/keyvault/agent/internal/crypto"
+	"github.com/keyvault/agent/internal/security"
 	"github.com/keyvault/agent/internal/storage"
 )
 
@@ -52,6 +53,25 @@ func main() {
 		log.Fatal("Failed to initialize storage:", err)
 	}
 	defer store.Close()
+
+	// Initialize security manager
+	securityConfig := &security.ManagerConfig{
+		EnableHardening:     true,
+		EnableScanning:      true,
+		EnableTesting:       true,
+		EnableCompliance:    true,
+		ReportDirectory:     "./security-reports",
+		ScanInterval:        24 * time.Hour,
+		TestInterval:        7 * 24 * time.Hour,
+		ComplianceStandards: []string{"SOC2", "ISO27001", "PCI-DSS"},
+	}
+	securityManager := security.NewSecurityManager(securityConfig)
+
+	// Initialize security manager
+	if err := securityManager.Initialize(ctx); err != nil {
+		log.Printf("Warning: Failed to initialize security manager: %v", err)
+		// Don't fail startup, but log the error
+	}
 
 	// Start performance monitoring if enabled
 	if cfg.Performance.Metrics.Enabled {
@@ -92,12 +112,16 @@ func main() {
 	log.Printf("Starting Vault Agent v%s on %s:%s", Version, cfg.Server.Host, port)
 	log.Printf("API documentation available at: http://localhost:%s/swagger/index.html", port)
 	
+	// Get hardened TLS configuration from security manager
+	tlsConfig := securityManager.GetTLSConfig()
+	
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, port),
 		Handler:      router,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
+		TLSConfig:    tlsConfig,
 	}
 
 	// Start server in goroutine

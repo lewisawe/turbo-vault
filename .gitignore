@@ -49,6 +49,14 @@ registration-token*
 api-keys*
 config/master.key
 
+# Security reports and assessments
+security-reports/
+vulnerability-reports/
+compliance-reports/
+penetration-test-results/
+*.security-report
+*.vuln-scan
+
 # Database and data
 *.db
 *.sqlite
@@ -77,13 +85,14 @@ coverage/
 *.py,cover
 htmlcov/
 
-# IDEs and editors (REMOVE .vscode/ since it exists in project)
+# IDEs and editors
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
+# .vscode/ - uncomment if you want to ignore VS Code settings
 
 # Docker
 .dockerignore

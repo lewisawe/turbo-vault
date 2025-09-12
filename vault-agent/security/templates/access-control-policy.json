@@ -1,0 +1,158 @@
+{
+  "id": "access-control-policy-template-v1",
+  "name": "Access Control Security Policy Template",
+  "category": "access",
+  "description": "Template for implementing comprehensive access control security policies",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "acc-001",
+      "name": "Multi-Factor Authentication",
+      "description": "Require MFA for all user authentication",
+      "condition": "auth.mfa_required == true",
+      "action": "enforce",
+      "parameters": ["auth.mfa_required"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "HIPAA"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "acc-002",
+      "name": "Strong Password Policy",
+      "description": "Enforce strong password requirements",
+      "condition": "auth.password_policy.min_length >= 12 AND auth.password_policy.complexity == true",
+      "action": "enforce",
+      "parameters": ["auth.password_policy.min_length", "auth.password_policy.complexity"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "PCI-DSS"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "acc-003",
+      "name": "Account Lockout Policy",
+      "description": "Implement account lockout after failed attempts",
+      "condition": "auth.lockout_policy.enabled == true AND auth.lockout_policy.max_attempts <= 5",
+      "action": "enforce",
+      "parameters": ["auth.lockout_policy.enabled", "auth.lockout_policy.max_attempts"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "acc-004",
+      "name": "Role-Based Access Control",
+      "description": "Implement RBAC with least privilege principle",
+      "condition": "access.rbac_enabled == true AND access.default_deny == true",
+      "action": "enforce",
+      "parameters": ["access.rbac_enabled", "access.default_deny"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001", "HIPAA"],
+        "severity": "high"
+      }
+    },
+    {
+      "id": "acc-005",
+      "name": "Session Management",
+      "description": "Implement secure session management",
+      "condition": "session.timeout <= 8h AND session.secure_cookies == true",
+      "action": "enforce",
+      "parameters": ["session.timeout", "session.secure_cookies"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "acc-006",
+      "name": "API Key Management",
+      "description": "Secure API key generation and management",
+      "condition": "api.key_rotation_enabled == true AND api.key_expiration <= 365d",
+      "action": "enforce",
+      "parameters": ["api.key_rotation_enabled", "api.key_expiration"],
+      "required": true,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "medium"
+      }
+    },
+    {
+      "id": "acc-007",
+      "name": "Certificate-Based Authentication",
+      "description": "Support certificate-based authentication",
+      "condition": "auth.certificate_auth_enabled == true",
+      "action": "allow",
+      "parameters": ["auth.certificate_auth_enabled"],
+      "required": false,
+      "metadata": {
+        "compliance": ["SOC2", "ISO27001"],
+        "severity": "low"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "auth.mfa_required",
+      "type": "boolean",
+      "description": "Whether MFA is required for authentication",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "auth.password_policy.min_length",
+      "type": "integer",
+      "description": "Minimum password length",
+      "default_value": 12,
+      "required": true,
+      "validation": "^[0-9]+$"
+    },
+    {
+      "name": "auth.password_policy.complexity",
+      "type": "boolean",
+      "description": "Whether password complexity is required",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "auth.lockout_policy.enabled",
+      "type": "boolean",
+      "description": "Whether account lockout is enabled",
+      "default_value": true,
+      "required": true,
+      "validation": "^(true|false)$"
+    },
+    {
+      "name": "auth.lockout_policy.max_attempts",
+      "type": "integer",
+      "description": "Maximum failed login attempts before lockout",
+      "default_value": 5,
+      "required": true,
+      "validation": "^[1-9][0-9]*$"
+    },
+    {
+      "name": "session.timeout",
+      "type": "duration",
+      "description": "Session timeout duration",
+      "default_value": "8h",
+      "required": true,
+      "validation": "^[0-9]+(h|m)$"
+    }
+  ],
+  "metadata": {
+    "author": "VaultAgent Security Team",
+    "compliance_standards": ["SOC2", "ISO27001", "PCI-DSS", "HIPAA"],
+    "risk_level": "high",
+    "implementation_effort": "medium"
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}
