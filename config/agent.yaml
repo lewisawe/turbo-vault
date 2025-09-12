@@ -1,11 +1,25 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 60s
+
 database:
   type: sqlite
   path: ./data/vault.db
 
 control_plane:
+  enabled: true
   url: https://api.keyvault.com
   cert_file: ./config/client.crt
   key_file: ./config/client.key
+  ca_file: ./config/ca.crt
+  heartbeat_interval: 30s
+  retry_interval: 5s
+  max_retries: 3
+  timeout: 10s
+  offline_mode: false
 
 security:
   master_key_file: ./config/master.key
@@ -15,3 +29,7 @@ security:
 logging:
   level: info
   file: ./data/agent.log
+
+performance:
+  metrics:
+    enabled: true

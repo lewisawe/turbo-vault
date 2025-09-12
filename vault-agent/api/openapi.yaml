@@ -1,0 +1,858 @@
+openapi: 3.0.3
+info:
+  title: Vault Agent API
+  description: |
+    Decentralized Key Management Platform API for secure secret storage and management.
+    
+    This API provides endpoints for managing secrets, authentication, and monitoring
+    in a self-hosted vault agent. All secrets are encrypted at rest using AES-256-GCM
+    with customer-managed keys.
+    
+    ## Authentication
+    
+    The API supports multiple authentication methods:
+    - API Keys (via `X-API-Key` header)
+    - JWT tokens (via `Authorization: Bearer <token>` header)
+    - mTLS client certificates
+    
+    ## Rate Limiting
+    
+    API requests are rate limited to prevent abuse:
+    - 1000 requests per minute per API key
+    - 100 requests per minute for unauthenticated endpoints
+    
+    ## Error Handling
+    
+    All API responses follow a consistent structure with proper HTTP status codes
+    and detailed error information when applicable.
+  version: 1.0.0
+  contact:
+    name: Vault Agent Support
+    email: support@vaultagent.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://vault.example.com
+    description: Production server
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+  - mTLS: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Get the health status of the vault agent
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                success: true
+                data:
+                  status: healthy
+                  version: "1.0.0"
+                  timestamp: "2025-09-11T10:00:00Z"
+                  checks:
+                    database: healthy
+                    encryption: healthy
+                request_id: "550e8400-e29b-41d4-a716-446655440000"
+                timestamp: "2025-09-11T10:00:00Z"
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/secrets:
+    get:
+      summary: List secrets
+      description: |
+        List secrets with optional filtering and pagination. Returns metadata only,
+        use the `/secrets/{id}/value` endpoint to retrieve actual secret values.
+      tags:
+        - Secrets
+      parameters:
+        - name: name_pattern
+          in: query
+          description: Filter secrets by name pattern (supports wildcards)
+          schema:
+            type: string
+            example: "database*"
+        - name: tags
+          in: query
+          description: Filter secrets by tags
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+            example: ["production", "database"]
+        - name: status
+          in: query
+          description: Filter secrets by status
+          schema:
+            type: string
+            enum: [active, deprecated, deleted, expired]
+            example: active
+        - name: created_after
+          in: query
+          description: Filter secrets created after this date (RFC3339)
+          schema:
+            type: string
+            format: date-time
+            example: "2025-01-01T00:00:00Z"
+        - name: created_by
+          in: query
+          description: Filter secrets by creator
+          schema:
+            type: string
+            example: "user@example.com"
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        '200':
+          description: List of secrets (metadata only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretListResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Create a new secret
+      description: Create a new secret with encrypted storage
+      tags:
+        - Secrets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSecretRequest'
+            example:
+              name: "database-password"
+              value: "super-secret-password"
+              description: "Database connection password"
+              metadata:
+                environment: "production"
+                service: "api"
+              tags: ["database", "production", "critical"]
+              expires_at: "2025-12-31T23:59:59Z"
+              rotation_due: "2025-10-01T00:00:00Z"
+      responses:
+        '201':
+          description: Secret created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Secret with same name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/secrets/{id}:
+    get:
+      summary: Get secret metadata
+      description: Get secret metadata without the actual value
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Secret ID (UUID)
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Secret metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '404':
+          description: Secret not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update a secret
+      description: Update an existing secret's metadata and/or value
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Secret ID (UUID)
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSecretRequest'
+            example:
+              name: "database-password-updated"
+              value: "new-super-secret-password"
+              description: "Updated database connection password"
+              metadata:
+                environment: "production"
+                service: "api"
+                updated: "true"
+              tags: ["database", "production", "critical", "updated"]
+      responses:
+        '200':
+          description: Secret updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Secret not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete a secret
+      description: Permanently delete a secret
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Secret ID (UUID)
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Secret deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Secret deleted successfully"
+                      id:
+                        type: string
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                  request_id:
+                    type: string
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-09-11T10:00:00Z"
+        '404':
+          description: Secret not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/secrets/{id}/value:
+    get:
+      summary: Get secret value
+      description: Get the decrypted value of a secret
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Secret ID (UUID)
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Secret with decrypted value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretValueResponse'
+        '404':
+          description: Secret not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/secrets/{id}/rotate:
+    post:
+      summary: Rotate a secret
+      description: Rotate a secret by updating its value and resetting rotation schedule
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Secret ID (UUID)
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateSecretRequest'
+            example:
+              new_value: "new-rotated-password"
+              reason: "Scheduled rotation"
+      responses:
+        '200':
+          description: Secret rotated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Secret not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/metrics:
+    get:
+      summary: Get metrics
+      description: Get basic system metrics and statistics
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+    mTLS:
+      type: mutualTLS
+      description: Mutual TLS authentication using client certificates
+
+  schemas:
+    CreateSecretRequest:
+      type: object
+      required:
+        - name
+        - value
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Unique name for the secret
+          example: "database-password"
+        value:
+          type: string
+          minLength: 1
+          description: The secret value to encrypt and store
+          example: "super-secret-password"
+        description:
+          type: string
+          maxLength: 1000
+          description: Optional description of the secret
+          example: "Database connection password"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Key-value metadata for the secret
+          example:
+            environment: "production"
+            service: "api"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for categorizing the secret
+          example: ["database", "production", "critical"]
+        expires_at:
+          type: string
+          format: date-time
+          description: Optional expiration date for the secret
+          example: "2025-12-31T23:59:59Z"
+        rotation_due:
+          type: string
+          format: date-time
+          description: Optional date when the secret should be rotated
+          example: "2025-10-01T00:00:00Z"
+
+    UpdateSecretRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Updated name for the secret
+          example: "database-password-updated"
+        value:
+          type: string
+          minLength: 1
+          description: Updated secret value
+          example: "new-super-secret-password"
+        description:
+          type: string
+          maxLength: 1000
+          description: Updated description
+          example: "Updated database connection password"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Updated metadata
+          example:
+            environment: "production"
+            service: "api"
+            updated: "true"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Updated tags
+          example: ["database", "production", "critical", "updated"]
+        expires_at:
+          type: string
+          format: date-time
+          description: Updated expiration date
+          example: "2026-12-31T23:59:59Z"
+        rotation_due:
+          type: string
+          format: date-time
+          description: Updated rotation due date
+          example: "2025-11-01T00:00:00Z"
+
+    RotateSecretRequest:
+      type: object
+      required:
+        - new_value
+      properties:
+        new_value:
+          type: string
+          minLength: 1
+          description: New value for the secret after rotation
+          example: "new-rotated-password"
+        reason:
+          type: string
+          maxLength: 500
+          description: Optional reason for the rotation
+          example: "Scheduled rotation"
+
+    SecretMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the secret
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Name of the secret
+          example: "database-password"
+        description:
+          type: string
+          description: Description of the secret
+          example: "Database connection password"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Key-value metadata
+          example:
+            environment: "production"
+            service: "api"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for categorization
+          example: ["database", "production", "critical"]
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-09-11T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-09-11T10:00:00Z"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Expiration timestamp
+          example: "2025-12-31T23:59:59Z"
+        rotation_due:
+          type: string
+          format: date-time
+          nullable: true
+          description: Next rotation due date
+          example: "2025-10-01T00:00:00Z"
+        version:
+          type: integer
+          description: Version number of the secret
+          example: 1
+        created_by:
+          type: string
+          description: User who created the secret
+          example: "user@example.com"
+        access_count:
+          type: integer
+          format: int64
+          description: Number of times the secret has been accessed
+          example: 42
+        last_accessed:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last access timestamp
+          example: "2025-09-11T09:30:00Z"
+        status:
+          type: string
+          enum: [active, deprecated, deleted, expired]
+          description: Current status of the secret
+          example: "active"
+
+    SecretResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SecretMetadata'
+
+    SecretValueResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/SecretMetadata'
+                - type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Decrypted secret value
+                      example: "super-secret-password"
+
+    SecretListResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SecretMetadata'
+            metadata:
+              $ref: '#/components/schemas/PaginationMetadata'
+
+    HealthResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, unhealthy]
+                  example: "healthy"
+                version:
+                  type: string
+                  example: "1.0.0"
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2025-09-11T10:00:00Z"
+                checks:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  example:
+                    database: "healthy"
+                    encryption: "healthy"
+
+    MetricsResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                total_secrets:
+                  type: integer
+                  format: int64
+                  example: 150
+                active_secrets:
+                  type: integer
+                  format: int64
+                  example: 140
+                expired_secrets:
+                  type: integer
+                  format: int64
+                  example: 5
+                requests_per_sec:
+                  type: number
+                  format: float
+                  example: 45.2
+                avg_response_time_ms:
+                  type: number
+                  format: float
+                  example: 12.5
+                uptime:
+                  type: string
+                  example: "72h30m15s"
+                last_updated:
+                  type: string
+                  format: date-time
+                  example: "2025-09-11T10:00:00Z"
+
+    APIResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful
+          example: true
+        data:
+          description: Response data (varies by endpoint)
+        error:
+          $ref: '#/components/schemas/APIError'
+        metadata:
+          $ref: '#/components/schemas/PaginationMetadata'
+        request_id:
+          type: string
+          description: Unique request identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          description: Response timestamp
+          example: "2025-09-11T10:00:00Z"
+
+    ErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/APIResponse'
+        - type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            error:
+              $ref: '#/components/schemas/APIError'
+
+    APIError:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [validation, authentication, authorization, not_found, conflict, rate_limit, internal, unavailable]
+          description: Error category
+          example: "validation"
+        code:
+          type: string
+          description: Specific error code
+          example: "VALIDATION_FAILED"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Request validation failed"
+        details:
+          type: object
+          description: Additional error details
+          example:
+            validation_errors:
+              - field: "name"
+                message: "Name is required"
+                value: ""
+        request_id:
+          type: string
+          description: Request identifier for tracking
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+          example: "2025-09-11T10:00:00Z"
+
+    PaginationMetadata:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        per_page:
+          type: integer
+          description: Items per page
+          example: 20
+        total:
+          type: integer
+          description: Total number of items
+          example: 150
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 8
+
+tags:
+  - name: Health
+    description: Health check and system status endpoints
+  - name: Secrets
+    description: Secret management operations
+  - name: Monitoring
+    description: Metrics and monitoring endpoints

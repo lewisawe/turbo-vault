@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault Agent - Management Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-shield-alt"></i> Vault Agent</h2>
+                <div class="status-indicator" id="connectionStatus">
+                    <span class="status-dot online"></span>
+                    <span>Online</span>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="nav-item active" data-page="dashboard">
+                    <a href="#"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                </li>
+                <li class="nav-item" data-page="secrets">
+                    <a href="#"><i class="fas fa-key"></i> Secrets</a>
+                </li>
+                <li class="nav-item" data-page="policies">
+                    <a href="#"><i class="fas fa-shield-alt"></i> Policies</a>
+                </li>
+                <li class="nav-item" data-page="users">
+                    <a href="#"><i class="fas fa-users"></i> Users</a>
+                </li>
+                <li class="nav-item" data-page="audit">
+                    <a href="#"><i class="fas fa-clipboard-list"></i> Audit Logs</a>
+                </li>
+                <li class="nav-item" data-page="analytics">
+                    <a href="#"><i class="fas fa-chart-bar"></i> Analytics</a>
+                </li>
+                <li class="nav-item" data-page="settings">
+                    <a href="#"><i class="fas fa-cog"></i> Settings</a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div class="page active" id="dashboard-page">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="refreshDashboard()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalSecrets">0</h3>
+                            <p>Total Secrets</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalPolicies">0</h3>
+                            <p>Active Policies</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalUsers">0</h3>
+                            <p>Users</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="uptime">0h 0m</h3>
+                            <p>Uptime</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts and Metrics -->
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Secret Access Patterns</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="accessChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>System Performance</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Activity</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="recentActivity" class="activity-list">
+                                <!-- Activity items will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>System Health</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="health-metrics">
+                                <div class="health-item">
+                                    <span class="health-label">CPU Usage</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="cpuUsage" style="width: 0%"></div>
+                                    </div>
+                                    <span class="health-value" id="cpuValue">0%</span>
+                                </div>
+                                <div class="health-item">
+                                    <span class="health-label">Memory Usage</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="memoryUsage" style="width: 0%"></div>
+                                    </div>
+                                    <span class="health-value" id="memoryValue">0%</span>
+                                </div>
+                                <div class="health-item">
+                                    <span class="health-label">Storage Usage</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="storageUsage" style="width: 0%"></div>
+                                    </div>
+                                    <span class="health-value" id="storageValue">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Secrets Page -->
+            <div class="page" id="secrets-page">
+                <div class="page-header">
+                    <h1>Secrets Management</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showCreateSecretModal()">
+                            <i class="fas fa-plus"></i> Create Secret
+                        </button>
+                        <button class="btn btn-secondary" onclick="refreshSecrets()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search and Filters -->
+                <div class="filters">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="secretSearch" placeholder="Search secrets..." onkeyup="filterSecrets()">
+                    </div>
+                    <select id="statusFilter" onchange="filterSecrets()">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="expired">Expired</option>
+                        <option value="rotating">Rotating</option>
+                    </select>
+                    <select id="tagFilter" onchange="filterSecrets()">
+                        <option value="">All Tags</option>
+                    </select>
+                </div>
+
+                <!-- Secrets Table -->
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="data-table" id="secretsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Tags</th>
+                                        <th>Created</th>
+                                        <th>Last Accessed</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="secretsTableBody">
+                                    <!-- Secrets will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Policies Page -->
+            <div class="page" id="policies-page">
+                <div class="page-header">
+                    <h1>Policy Management</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showCreatePolicyModal()">
+                            <i class="fas fa-plus"></i> Create Policy
+                        </button>
+                        <button class="btn btn-secondary" onclick="refreshPolicies()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="data-table" id="policiesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Description</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="policiesTableBody">
+                                    <!-- Policies will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div class="page" id="users-page">
+                <div class="page-header">
+                    <h1>User Management</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="showCreateUserModal()">
+                            <i class="fas fa-plus"></i> Create User
+                        </button>
+                        <button class="btn btn-secondary" onclick="refreshUsers()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="data-table" id="usersTable">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Roles</th>
+                                        <th>Status</th>
+                                        <th>Last Login</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <!-- Users will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Logs Page -->
+            <div class="page" id="audit-page">
+                <div class="page-header">
+                    <h1>Audit Logs</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="exportAuditLogs()">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                        <button class="btn btn-secondary" onclick="refreshAuditLogs()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Audit Filters -->
+                <div class="filters">
+                    <input type="datetime-local" id="auditStartDate" onchange="filterAuditLogs()">
+                    <input type="datetime-local" id="auditEndDate" onchange="filterAuditLogs()">
+                    <select id="auditEventType" onchange="filterAuditLogs()">
+                        <option value="">All Events</option>
+                        <option value="secret_access">Secret Access</option>
+                        <option value="secret_create">Secret Create</option>
+                        <option value="secret_update">Secret Update</option>
+                        <option value="secret_delete">Secret Delete</option>
+                        <option value="policy_change">Policy Change</option>
+                        <option value="user_login">User Login</option>
+                    </select>
+                    <input type="text" id="auditUserFilter" placeholder="Filter by user..." onkeyup="filterAuditLogs()">
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="data-table" id="auditTable">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Event Type</th>
+                                        <th>User</th>
+                                        <th>Resource</th>
+                                        <th>Action</th>
+                                        <th>Result</th>
+                                        <th>IP Address</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auditTableBody">
+                                    <!-- Audit logs will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Page -->
+            <div class="page" id="analytics-page">
+                <div class="page-header">
+                    <h1>Analytics & Reports</h1>
+                    <div class="header-actions">
+                        <select id="analyticsTimeRange" onchange="updateAnalytics()">
+                            <option value="1h">Last Hour</option>
+                            <option value="24h" selected>Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Request Volume</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="requestVolumeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Response Times</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="responseTimeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Top Accessed Secrets</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="topSecretsChart"></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Error Rates</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="errorRateChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div class="page" id="settings-page">
+                <div class="page-header">
+                    <h1>Settings</h1>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>General Settings</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="generalSettingsForm">
+                                <div class="form-group">
+                                    <label for="agentName">Agent Name</label>
+                                    <input type="text" id="agentName" name="agentName">
+                                </div>
+                                <div class="form-group">
+                                    <label for="logLevel">Log Level</label>
+                                    <select id="logLevel" name="logLevel">
+                                        <option value="debug">Debug</option>
+                                        <option value="info">Info</option>
+                                        <option value="warn">Warning</option>
+                                        <option value="error">Error</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="enableMetrics" name="enableMetrics">
+                                        Enable Metrics Collection
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Save Settings</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Security Settings</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="securitySettingsForm">
+                                <div class="form-group">
+                                    <label for="sessionTimeout">Session Timeout (minutes)</label>
+                                    <input type="number" id="sessionTimeout" name="sessionTimeout" min="5" max="1440">
+                                </div>
+                                <div class="form-group">
+                                    <label for="maxLoginAttempts">Max Login Attempts</label>
+                                    <input type="number" id="maxLoginAttempts" name="maxLoginAttempts" min="1" max="10">
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="requireMFA" name="requireMFA">
+                                        Require Multi-Factor Authentication
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Save Security Settings</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Backup Settings</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="backupSettingsForm">
+                                <div class="form-group">
+                                    <label for="backupSchedule">Backup Schedule</label>
+                                    <select id="backupSchedule" name="backupSchedule">
+                                        <option value="disabled">Disabled</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="backupRetention">Retention Period (days)</label>
+                                    <input type="number" id="backupRetention" name="backupRetention" min="1" max="365">
+                                </div>
+                                <div class="form-group">
+                                    <button type="button" class="btn btn-secondary" onclick="createBackup()">
+                                        <i class="fas fa-save"></i> Create Backup Now
+                                    </button>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Save Backup Settings</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="createSecretModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Secret</h3>
+                <button class="modal-close" onclick="closeModal('createSecretModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createSecretForm">
+                    <div class="form-group">
+                        <label for="newSecretName">Name *</label>
+                        <input type="text" id="newSecretName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newSecretValue">Value *</label>
+                        <textarea id="newSecretValue" rows="4" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="newSecretTags">Tags (comma-separated)</label>
+                        <input type="text" id="newSecretTags" placeholder="production, api-key, database">
+                    </div>
+                    <div class="form-group">
+                        <label for="newSecretDescription">Description</label>
+                        <textarea id="newSecretDescription" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="newSecretExpiry">Expiry Date (optional)</label>
+                        <input type="datetime-local" id="newSecretExpiry">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('createSecretModal')">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createSecret()">Create Secret</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/secrets.js"></script>
+    <script src="js/policies.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/audit.js"></script>
+    <script src="js/analytics.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/websocket.js"></script>
+</body>
+</html>
