@@ -33,7 +33,7 @@ func CreateSecret(store *storage.Storage) gin.HandlerFunc {
 			RotationDue: req.RotationDue,
 		}
 
-		if err := store.CreateSecret(secret); err != nil {
+		if err := store.CreateSecret(c.Request.Context(), secret); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create secret"})
 			return
 		}
@@ -48,7 +48,7 @@ func GetSecret(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		
-		secret, err := store.GetSecret(id)
+		secret, err := store.GetSecret(c.Request.Context(), id)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Secret not found"})
 			return
@@ -84,7 +84,7 @@ func UpdateSecret(store *storage.Storage) gin.HandlerFunc {
 			RotationDue: req.RotationDue,
 		}
 
-		if err := store.UpdateSecret(id, secret); err != nil {
+		if err := store.UpdateSecret(c.Request.Context(), id, secret); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update secret"})
 			return
 		}
@@ -98,7 +98,7 @@ func DeleteSecret(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		
-		if err := store.DeleteSecret(id); err != nil {
+		if err := store.DeleteSecret(c.Request.Context(), id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete secret"})
 			return
 		}
@@ -109,7 +109,7 @@ func DeleteSecret(store *storage.Storage) gin.HandlerFunc {
 
 func ListSecrets(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		secrets, err := store.ListSecrets()
+		secrets, err := store.ListSecrets(c.Request.Context(), &storage.SecretFilter{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list secrets"})
 			return

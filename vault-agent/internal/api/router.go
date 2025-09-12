@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/keyvault/agent/internal/handlers"
 	"github.com/keyvault/agent/internal/storage"
 )
 
@@ -47,6 +48,7 @@ func NewRouter(config *RouterConfig) *gin.Engine {
 	// Create handlers
 	secretHandler := NewSecretHandler(config.Storage)
 	healthHandler := NewHealthHandler(config.Storage, config.Version)
+	webHandler := handlers.NewWebHandler()
 
 	// Health check endpoint (no authentication required)
 	router.GET("/health", healthHandler.GetHealth)
@@ -98,9 +100,8 @@ func NewRouter(config *RouterConfig) *gin.Engine {
 		})
 	}
 
-	// Static file serving for web interface (if needed)
-	router.Static("/static", "./web/static")
-	router.StaticFile("/", "./web/index.html")
+	// Setup web interface routes
+	webHandler.SetupWebRoutes(router)
 
 	return router
 }
