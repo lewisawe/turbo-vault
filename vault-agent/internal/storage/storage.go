@@ -21,6 +21,7 @@ type StorageBackend interface {
 	// Secret operations
 	CreateSecret(ctx context.Context, secret *Secret) error
 	GetSecret(ctx context.Context, id string) (*Secret, error)
+	GetSecretByName(ctx context.Context, name string) (*Secret, error)
 	UpdateSecret(ctx context.Context, id string, secret *Secret) error
 	DeleteSecret(ctx context.Context, id string) error
 	ListSecrets(ctx context.Context, filter *SecretFilter) ([]*Secret, error)
@@ -222,6 +223,33 @@ func (s *Storage) GetSecret(ctx context.Context, id string) (*Secret, error) {
 	return secret, nil
 }
 
+// GetSecretByName retrieves and decrypts a secret by name
+func (s *Storage) GetSecretByName(ctx context.Context, name string) (*Secret, error) {
+	secret, err := s.backend.GetSecretByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt the secret value
+	var encryptedData crypto.EncryptedData
+	if err := json.Unmarshal(secret.EncryptedValue, &encryptedData); err != nil {
+		return nil, fmt.Errorf("failed to deserialize encrypted data: %w", err)
+	}
+
+	plaintext, err := s.encryptor.DecryptString(ctx, &encryptedData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt secret: %w", err)
+	}
+
+	secret.Value = plaintext
+	secret.EncryptedValue = nil // Don't return encrypted data
+
+	// Update access tracking
+	go s.updateAccessTracking(ctx, secret.ID)
+
+	return secret, nil
+}
+
 // UpdateSecret updates an existing secret
 func (s *Storage) UpdateSecret(ctx context.Context, id string, secret *Secret) error {
 	// Encrypt the new value if provided
@@ -266,6 +294,62 @@ func (s *Storage) ListSecrets(ctx context.Context, filter *SecretFilter) ([]*Sec
 	}
 
 	return secrets, nil
+}
+
+// ListAllSecrets lists all secrets (simplified version for control plane)
+func (s *Storage) ListAllSecrets() ([]*Secret, error) {
+	ctx := context.Background()
+	return s.ListSecrets(ctx, nil)
+}
+
+// GetType returns the storage backend type
+func (s *Storage) GetType() string {
+	// Determine type based on backend
+	switch s.backend.(type) {
+	case *SQLiteBackend:
+		return "sqlite"
+	case *PostgreSQLBackend:
+		return "postgresql"
+	case *MySQLBackend:
+		return "mysql"
+	default:
+		return "unknown"
+	}
+}
+
+// GetMetrics returns storage metrics for monitoring
+func (s *Storage) GetMetrics() (map[string]interface{}, error) {
+	ctx := context.Background()
+	
+	// Get basic metrics
+	secrets, err := s.backend.ListSecrets(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := map[string]interface{}{
+		"total_secrets": len(secrets),
+		"storage_type":  s.GetType(),
+		"timestamp":     time.Now(),
+	}
+
+	// Add expiration metrics
+	var expiring, expired int
+	now := time.Now()
+	for _, secret := range secrets {
+		if secret.ExpiresAt != nil {
+			if secret.ExpiresAt.Before(now) {
+				expired++
+			} else if secret.ExpiresAt.Before(now.AddDate(0, 0, 30)) {
+				expiring++
+			}
+		}
+	}
+
+	metrics["expired_secrets"] = expired
+	metrics["expiring_secrets"] = expiring
+
+	return metrics, nil
 }
 
 // updateAccessTracking updates access count and last accessed time
@@ -417,6 +501,34 @@ func (b *SQLiteBackend) GetSecret(ctx context.Context, id string) (*Secret, erro
 	var metadataJSON, tagsJSON string
 	
 	err := b.db.QueryRowContext(ctx, query, id).Scan(
+		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
+		&metadataJSON, &tagsJSON, &secret.CreatedAt, &secret.UpdatedAt,
+		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
+		&secret.CreatedBy, &secret.AccessCount, &secret.LastAccessed, &secret.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+	json.Unmarshal([]byte(tagsJSON), &secret.Tags)
+	
+	return &secret, nil
+}
+
+// GetSecretByName implements StorageBackend.GetSecretByName for SQLite
+func (b *SQLiteBackend) GetSecretByName(ctx context.Context, name string) (*Secret, error) {
+	query := `
+	SELECT id, name, encrypted_value, key_id, metadata, tags,
+		created_at, updated_at, expires_at, rotation_due, version,
+		created_by, access_count, last_accessed, status
+	FROM secrets WHERE name = ?
+	`
+	
+	var secret Secret
+	var metadataJSON, tagsJSON string
+	
+	err := b.db.QueryRowContext(ctx, query, name).Scan(
 		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
 		&metadataJSON, &tagsJSON, &secret.CreatedAt, &secret.UpdatedAt,
 		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
@@ -642,6 +754,33 @@ func (b *PostgreSQLBackend) GetSecret(ctx context.Context, id string) (*Secret, 
 	return &secret, nil
 }
 
+// GetSecretByName implements StorageBackend.GetSecretByName for PostgreSQL
+func (b *PostgreSQLBackend) GetSecretByName(ctx context.Context, name string) (*Secret, error) {
+	query := `
+	SELECT id, name, encrypted_value, key_id, metadata, tags,
+		created_at, updated_at, expires_at, rotation_due, version,
+		created_by, access_count, last_accessed, status
+	FROM secrets WHERE name = $1
+	`
+	
+	var secret Secret
+	var metadataJSON string
+	
+	err := b.db.QueryRowContext(ctx, query, name).Scan(
+		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
+		&metadataJSON, pq.Array(&secret.Tags), &secret.CreatedAt, &secret.UpdatedAt,
+		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
+		&secret.CreatedBy, &secret.AccessCount, &secret.LastAccessed, &secret.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+	
+	return &secret, nil
+}
+
 // UpdateSecret implements StorageBackend.UpdateSecret for PostgreSQL
 func (b *PostgreSQLBackend) UpdateSecret(ctx context.Context, id string, secret *Secret) error {
 	metadataJSON, _ := json.Marshal(secret.Metadata)
@@ -840,6 +979,34 @@ func (b *MySQLBackend) GetSecret(ctx context.Context, id string) (*Secret, error
 	var metadataJSON, tagsJSON string
 	
 	err := b.db.QueryRowContext(ctx, query, id).Scan(
+		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
+		&metadataJSON, &tagsJSON, &secret.CreatedAt, &secret.UpdatedAt,
+		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
+		&secret.CreatedBy, &secret.AccessCount, &secret.LastAccessed, &secret.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	json.Unmarshal([]byte(metadataJSON), &secret.Metadata)
+	json.Unmarshal([]byte(tagsJSON), &secret.Tags)
+	
+	return &secret, nil
+}
+
+// GetSecretByName implements StorageBackend.GetSecretByName for MySQL
+func (b *MySQLBackend) GetSecretByName(ctx context.Context, name string) (*Secret, error) {
+	query := `
+	SELECT id, name, encrypted_value, key_id, metadata, tags,
+		created_at, updated_at, expires_at, rotation_due, version,
+		created_by, access_count, last_accessed, status
+	FROM secrets WHERE name = ?
+	`
+	
+	var secret Secret
+	var metadataJSON, tagsJSON string
+	
+	err := b.db.QueryRowContext(ctx, query, name).Scan(
 		&secret.ID, &secret.Name, &secret.EncryptedValue, &secret.KeyID,
 		&metadataJSON, &tagsJSON, &secret.CreatedAt, &secret.UpdatedAt,
 		&secret.ExpiresAt, &secret.RotationDue, &secret.Version,
