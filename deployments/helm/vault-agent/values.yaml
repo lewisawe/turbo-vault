@@ -1,0 +1,205 @@
+# Default values for vault-agent
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Image configuration
+image:
+  registry: docker.io
+  repository: vault-agent/vault-agent
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Deployment configuration
+replicaCount: 3
+
+# Service configuration
+service:
+  type: LoadBalancer
+  port: 443
+  targetPort: 8200
+  annotations: {}
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: vault-agent.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Resource configuration
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Security configuration
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+podSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Configuration
+config:
+  # Server configuration
+  server:
+    bind_address: "0.0.0.0:8200"
+    tls_cert_file: "/etc/ssl/vault-agent/tls.crt"
+    tls_key_file: "/etc/ssl/vault-agent/tls.key"
+    log_level: "info"
+    
+  # Storage configuration
+  storage:
+    type: "postgresql"
+    connection_string: ""
+    
+  # Cache configuration
+  cache:
+    type: "redis"
+    connection_string: ""
+    
+  # Backup configuration
+  backup:
+    enabled: true
+    schedule: "0 2 * * *"
+    retention_days: 30
+
+# Persistence configuration
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+# TLS configuration
+tls:
+  enabled: true
+  secretName: vault-agent-tls
+  autoGenerate: true
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+  grafana:
+    enabled: true
+    dashboards:
+      enabled: true
+
+# Network policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - vault-agent
+          topologyKey: kubernetes.io/hostname
+
+# Dependencies
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "vault-agent-password"
+    database: "vault_agent"
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "vault-agent-redis-password"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: 30
+  storage:
+    type: "s3"
+    bucket: ""
+    region: ""
+    accessKey: ""
+    secretKey: ""
+
+# Cloud provider integration
+cloudIntegration:
+  enabled: false
+  providers:
+    aws:
+      enabled: false
+      region: ""
+      accessKey: ""
+      secretKey: ""
+    azure:
+      enabled: false
+      tenantId: ""
+      clientId: ""
+      clientSecret: ""
+    gcp:
+      enabled: false
+      projectId: ""
+      serviceAccountKey: ""

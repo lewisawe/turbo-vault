@@ -1,0 +1,166 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: vaultagents.vault-agent.io
+  labels:
+    app.kubernetes.io/name: vault-agent-operator
+    app.kubernetes.io/component: crd
+spec:
+  group: vault-agent.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              replicas:
+                type: integer
+                minimum: 1
+                maximum: 100
+                default: 3
+              image:
+                type: object
+                properties:
+                  repository:
+                    type: string
+                    default: "vault-agent/vault-agent"
+                  tag:
+                    type: string
+                    default: "latest"
+                  pullPolicy:
+                    type: string
+                    enum: ["Always", "IfNotPresent", "Never"]
+                    default: "IfNotPresent"
+              config:
+                type: object
+                properties:
+                  logLevel:
+                    type: string
+                    enum: ["debug", "info", "warn", "error"]
+                    default: "info"
+                  storage:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: ["postgresql", "mysql", "sqlite"]
+                        default: "postgresql"
+                      connectionString:
+                        type: string
+                  tls:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      secretName:
+                        type: string
+                      autoGenerate:
+                        type: boolean
+                        default: true
+              resources:
+                type: object
+                properties:
+                  requests:
+                    type: object
+                    properties:
+                      cpu:
+                        type: string
+                        default: "100m"
+                      memory:
+                        type: string
+                        default: "256Mi"
+                  limits:
+                    type: object
+                    properties:
+                      cpu:
+                        type: string
+                        default: "500m"
+                      memory:
+                        type: string
+                        default: "512Mi"
+              backup:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  schedule:
+                    type: string
+                    default: "0 2 * * *"
+                  retention:
+                    type: integer
+                    minimum: 1
+                    maximum: 365
+                    default: 30
+              monitoring:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  prometheus:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+            required:
+            - replicas
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Running", "Failed", "Succeeded"]
+              replicas:
+                type: integer
+              readyReplicas:
+                type: integer
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    message:
+                      type: string
+    subresources:
+      status: {}
+      scale:
+        specReplicasPath: .spec.replicas
+        statusReplicasPath: .status.replicas
+        labelSelectorPath: .status.selector
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Replicas
+      type: integer
+      jsonPath: .spec.replicas
+    - name: Ready
+      type: integer
+      jsonPath: .status.readyReplicas
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: vaultagents
+    singular: vaultagent
+    kind: VaultAgent
+    shortNames:
+    - va

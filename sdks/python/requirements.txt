@@ -1,0 +1,22 @@
+# Core dependencies
+httpx>=0.24.0
+pydantic>=2.0.0
+cryptography>=41.0.0
+pyjwt>=2.8.0
+tenacity>=8.2.0
+
+# Optional cloud provider support
+boto3>=1.26.0; extra == "cloud"
+azure-identity>=1.12.0; extra == "cloud"
+azure-keyvault-secrets>=4.7.0; extra == "cloud"
+google-cloud-secret-manager>=2.16.0; extra == "cloud"
+
+# Development and testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-benchmark>=4.0.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+pre-commit>=3.0.0
