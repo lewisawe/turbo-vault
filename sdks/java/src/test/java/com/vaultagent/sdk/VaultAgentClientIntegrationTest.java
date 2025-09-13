@@ -176,7 +176,7 @@ class VaultAgentClientIntegrationTest {
                                 """)));
 
         // Act
-        Secret secret = client.getSecret(null, "secret-123");
+        Secret secret = client.getSecret("secret-123");
 
         // Assert
         assertNotNull(secret);
@@ -207,7 +207,7 @@ class VaultAgentClientIntegrationTest {
 
         // Act & Assert
         NotFoundError exception = assertThrows(NotFoundError.class, () -> {
-            client.getSecret(null, "nonexistent");
+            client.getSecret("nonexistent");
         });
 
         assertTrue(exception.getMessage().contains("Secret not found"));
@@ -237,7 +237,7 @@ class VaultAgentClientIntegrationTest {
                 .build();
 
         // Act
-        Secret secret = client.updateSecret(null, "secret-123", request);
+        Secret secret = client.updateSecret("secret-123", request);
 
         // Assert
         assertNotNull(secret);
@@ -260,7 +260,7 @@ class VaultAgentClientIntegrationTest {
 
         // Act & Assert
         assertDoesNotThrow(() -> {
-            client.deleteSecret(null, "secret-123");
+            client.deleteSecret("secret-123");
         });
 
         // Verify request
@@ -490,7 +490,7 @@ class VaultAgentClientIntegrationTest {
 
         // Act & Assert
         AuthenticationError exception = assertThrows(AuthenticationError.class, () -> {
-            client.getSecret(null, "secret-123");
+            client.getSecret("secret-123");
         });
 
         assertTrue(exception.getMessage().contains("Invalid API key"));
@@ -513,7 +513,7 @@ class VaultAgentClientIntegrationTest {
 
         // Act & Assert
         AuthorizationError exception = assertThrows(AuthorizationError.class, () -> {
-            client.getSecret(null, "secret-123");
+            client.getSecret("secret-123");
         });
 
         assertTrue(exception.getMessage().contains("Insufficient permissions"));
@@ -536,7 +536,7 @@ class VaultAgentClientIntegrationTest {
 
         // Act & Assert
         RateLimitError exception = assertThrows(RateLimitError.class, () -> {
-            client.getSecret(null, "secret-123");
+            client.getSecret("secret-123");
         });
 
         assertTrue(exception.getMessage().contains("Rate limit exceeded"));
@@ -596,8 +596,8 @@ class VaultAgentClientIntegrationTest {
                                 """)));
 
         // Act - Make two requests
-        Secret secret1 = client.getSecret(null, "secret-123");
-        Secret secret2 = client.getSecret(null, "secret-123");
+        Secret secret1 = client.getSecret("secret-123");
+        Secret secret2 = client.getSecret("secret-123");
 
         // Assert
         assertEquals(secret1.getId(), secret2.getId());
@@ -638,7 +638,7 @@ class VaultAgentClientIntegrationTest {
                                 """)));
 
         // Act
-        Secret secret = client.getSecret(null, "secret-123");
+        Secret secret = client.getSecret("secret-123");
 
         // Assert
         assertNotNull(secret);

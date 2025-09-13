@@ -56,11 +56,9 @@ class AWSSecretsManager(CloudProvider):
         if self._client is None:
             try:
                 import boto3
-                session = boto3.Session(
-                    aws_access_key_id=self.config.credentials.get('access_key_id'),
-                    aws_secret_access_key=self.config.credentials.get('secret_access_key'),
-                    region_name=self.config.region
-                )
+                # Use AWS credential chain (IAM roles, environment variables, ~/.aws/credentials)
+                # This is more secure than hard-coding credentials
+                session = boto3.Session(region_name=self.config.region)
                 self._client = session.client('secretsmanager')
             except ImportError:
                 raise ImportError("boto3 is required for AWS integration. Install with: pip install boto3")
