@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyVault - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>KeyVault</h2>
+                <div class="status-indicator">
+                    <div class="status-dot online"></div>
+                    <span>Online</span>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="nav-item active" data-page="dashboard">
+                    <a href="#"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                </li>
+                <li class="nav-item" data-page="secrets">
+                    <a href="#"><i class="fas fa-key"></i> Secrets</a>
+                </li>
+                <li class="nav-item" data-page="policies">
+                    <a href="#"><i class="fas fa-shield-alt"></i> Policies</a>
+                </li>
+                <li class="nav-item" data-page="users">
+                    <a href="#"><i class="fas fa-users"></i> Users</a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboardPage" class="page">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <button class="btn btn-primary" onclick="refreshDashboard()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalSecrets">0</h3>
+                            <p>Total Secrets</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalPolicies">0</h3>
+                            <p>Active Policies</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalUsers">0</h3>
+                            <p>Users</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="uptime">0h 0m</h3>
+                            <p>Uptime</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Secrets Page -->
+            <div id="secretsPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1>Secrets Management</h1>
+                    <button class="btn btn-primary" onclick="createNewSecret()">
+                        <i class="fas fa-plus"></i> Create Secret
+                    </button>
+                </div>
+
+                <!-- Search and Filter -->
+                <div class="card">
+                    <div class="card-body">
+                        <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                            <input type="text" id="searchSecrets" placeholder="Search secrets..." 
+                                   style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                            <select id="filterByTag" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                                <option value="">All Tags</option>
+                            </select>
+                            <select id="filterByStatus" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="expired">Expired</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Secrets</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Tags</th>
+                                        <th>Created</th>
+                                        <th>Last Accessed</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="secretsTableBody">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">Loading secrets...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Policies Page -->
+            <div id="policiesPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1>Policies</h1>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div id="policiesContent">Loading policies...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div id="usersPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1>User Management</h1>
+                    <button class="btn btn-primary" onclick="createNewUser()">
+                        <i class="fas fa-plus"></i> Create User
+                    </button>
+                </div>
+
+                <!-- Search Users -->
+                <div class="card">
+                    <div class="card-body">
+                        <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                            <input type="text" id="searchUsers" placeholder="Search users..." 
+                                   style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                            <select id="filterByRole" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                                <option value="">All Roles</option>
+                                <option value="administrator">Administrator</option>
+                                <option value="developer">Developer</option>
+                                <option value="viewer">Viewer</option>
+                            </select>
+                            <select id="filterByUserStatus" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Users</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Last Login</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">Loading users...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let isInitialized = false;
+        let authToken = null;
+        let currentUser = null;
+        
+        // Check authentication on page load
+        function checkAuth() {
+            authToken = localStorage.getItem('keyVaultToken');
+            const userStr = localStorage.getItem('keyVaultUser');
+            
+            if (!authToken) {
+                // Redirect to login
+                window.location.href = '/login.html';
+                return false;
+            }
+            
+            if (userStr) {
+                currentUser = JSON.parse(userStr);
+                updateUserInfo();
+            }
+            
+            return true;
+        }
+        
+        // Update user info in UI
+        function updateUserInfo() {
+            if (currentUser) {
+                // Add user info to sidebar
+                const sidebar = document.querySelector('.sidebar-header');
+                if (sidebar && !document.getElementById('userInfo')) {
+                    const userInfo = document.createElement('div');
+                    userInfo.id = 'userInfo';
+                    userInfo.style.cssText = 'margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;';
+                    userInfo.innerHTML = `
+                        <div style="color: #ffffff; font-size: 12px;">
+                            <div><strong>${currentUser.username}</strong></div>
+                            <div style="color: #ccc;">${currentUser.role}</div>
+                            <button onclick="logout()" style="margin-top: 8px; padding: 4px 8px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                                Logout
+                            </button>
+                        </div>
+                    `;
+                    sidebar.appendChild(userInfo);
+                }
+            }
+        }
+        
+        // Logout function
+        function logout() {
+            localStorage.removeItem('keyVaultToken');
+            localStorage.removeItem('keyVaultUser');
+            window.location.href = '/login.html';
+        }
+        
+        // Enhanced fetch with authentication
+        async function authenticatedFetch(url, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            };
+            
+            const response = await fetch(url, { ...options, ...defaultOptions });
+            
+            // Handle authentication errors
+            if (response.status === 401) {
+                localStorage.removeItem('keyVaultToken');
+                localStorage.removeItem('keyVaultUser');
+                window.location.href = '/login.html';
+                return null;
+            }
+            
+            return response;
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            if (isInitialized) return;
+            
+            // Check authentication first
+            if (!checkAuth()) return;
+            
+            isInitialized = true;
+            
+            console.log('Dashboard initialized with authentication');
+            setupNavigation();
+            loadDashboardStats();
+            loadSecrets();
+        });
+        
+        function setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    // Remove active class from all items
+                    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                    item.classList.add('active');
+                    
+                    // Hide all pages
+                    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+                    
+                    // Show selected page
+                    const page = item.dataset.page;
+                    const targetPage = document.getElementById(page + 'Page');
+                    if (targetPage) {
+                        targetPage.style.display = 'block';
+                        
+                        // Load page-specific data and setup
+                        if (page === 'secrets') {
+                            loadSecrets();
+                            setupSecretFilters();
+                        }
+                        if (page === 'policies') loadPolicies();
+                        if (page === 'users') {
+                            loadUsers();
+                            setupUserFilters();
+                        }
+                    }
+                });
+            });
+        }
+        
+        async function loadDashboardStats() {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/system/stats');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('totalSecrets').textContent = data.data.total_secrets || 0;
+                    document.getElementById('totalPolicies').textContent = data.data.active_policies || 0;
+                    document.getElementById('totalUsers').textContent = data.data.total_users || 0;
+                    document.getElementById('uptime').textContent = formatUptime(data.data.uptime_seconds || 0);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        let allSecrets = [];
+        
+        async function loadSecrets() {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/secrets');
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    allSecrets = data.data;
+                    populateFilters();
+                    displaySecrets(allSecrets);
+                }
+            } catch (error) {
+                console.error('Error loading secrets:', error);
+                showNotification('Error loading secrets', 'error');
+            }
+        }
+        
+        function populateFilters() {
+            // Populate tag filter
+            const tagFilter = document.getElementById('filterByTag');
+            const tags = [...new Set(allSecrets.flatMap(s => s.tags || []))];
+            
+            tagFilter.innerHTML = '<option value="">All Tags</option>';
+            tags.forEach(tag => {
+                tagFilter.innerHTML += `<option value="${tag}">${tag}</option>`;
+            });
+        }
+        
+        function displaySecrets(secrets) {
+            const tbody = document.getElementById('secretsTableBody');
+            
+            if (secrets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No secrets found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            secrets.forEach(secret => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <strong>${secret.name}</strong>
+                        <br><small class="text-muted">${secret.id}</small>
+                    </td>
+                    <td><span class="status-badge status-${secret.status}">${secret.status}</span></td>
+                    <td>${secret.tags ? secret.tags.map(tag => `<span class="tag-badge">${tag}</span>`).join(' ') : '-'}</td>
+                    <td>${new Date(secret.created_at).toLocaleDateString()}</td>
+                    <td>${secret.last_accessed ? new Date(secret.last_accessed).toLocaleDateString() : 'Never'}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-secondary" onclick="viewSecret('${secret.id}')" title="View">
+                                👁️
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="editSecret('${secret.id}')" title="Edit">
+                                ✏️
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="copySecret('${secret.id}')" title="Copy">
+                                📋
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSecret('${secret.id}')" title="Delete">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Search and filter functionality
+        function setupSecretFilters() {
+            const searchInput = document.getElementById('searchSecrets');
+            const tagFilter = document.getElementById('filterByTag');
+            const statusFilter = document.getElementById('filterByStatus');
+            
+            function filterSecrets() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const selectedTag = tagFilter.value;
+                const selectedStatus = statusFilter.value;
+                
+                const filtered = allSecrets.filter(secret => {
+                    const matchesSearch = secret.name.toLowerCase().includes(searchTerm);
+                    const matchesTag = !selectedTag || (secret.tags && secret.tags.includes(selectedTag));
+                    const matchesStatus = !selectedStatus || secret.status === selectedStatus;
+                    
+                    return matchesSearch && matchesTag && matchesStatus;
+                });
+                
+                displaySecrets(filtered);
+            }
+            
+            searchInput.addEventListener('input', filterSecrets);
+            tagFilter.addEventListener('change', filterSecrets);
+            statusFilter.addEventListener('change', filterSecrets);
+        }
+        
+        async function loadPolicies() {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/policies');
+                const data = await response.json();
+                
+                const content = document.getElementById('policiesContent');
+                if (data.success && data.data) {
+                    content.innerHTML = data.data.map(policy => `
+                        <div class="policy-item">
+                            <h4>${policy.name}</h4>
+                            <p>${policy.description}</p>
+                            <div class="policy-meta">
+                                <span class="status-badge status-${policy.status}">${policy.status}</span>
+                                <span class="priority-badge">Priority: ${policy.priority}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading policies:', error);
+                document.getElementById('policiesContent').innerHTML = '<p>Error loading policies</p>';
+            }
+        }
+        
+        let allUsers = [];
+        
+        async function loadUsers() {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/users');
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    allUsers = data.data;
+                    displayUsers(allUsers);
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showNotification('Error loading users', 'error');
+            }
+        }
+        
+        function displayUsers(users) {
+            const tbody = document.getElementById('usersTableBody');
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No users found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <strong>${user.username}</strong>
+                        <br><small class="text-muted">${user.id}</small>
+                    </td>
+                    <td>${user.email}</td>
+                    <td><span class="role-badge">${user.role}</span></td>
+                    <td><span class="status-badge status-${user.status}">${user.status}</span></td>
+                    <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-primary" onclick="editUser('${user.id}')" title="Edit">
+                                ✏️
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="resetUserPassword('${user.id}')" title="Reset Password">
+                                🔑
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteUser('${user.id}')" title="Delete">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        function setupUserFilters() {
+            const searchInput = document.getElementById('searchUsers');
+            const roleFilter = document.getElementById('filterByRole');
+            const statusFilter = document.getElementById('filterByUserStatus');
+            
+            function filterUsers() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const selectedRole = roleFilter.value;
+                const selectedStatus = statusFilter.value;
+                
+                const filtered = allUsers.filter(user => {
+                    const matchesSearch = user.username.toLowerCase().includes(searchTerm) || 
+                                        user.email.toLowerCase().includes(searchTerm);
+                    const matchesRole = !selectedRole || user.role === selectedRole;
+                    const matchesStatus = !selectedStatus || user.status === selectedStatus;
+                    
+                    return matchesSearch && matchesRole && matchesStatus;
+                });
+                
+                displayUsers(filtered);
+            }
+            
+            searchInput.addEventListener('input', filterUsers);
+            roleFilter.addEventListener('change', filterUsers);
+            statusFilter.addEventListener('change', filterUsers);
+        }
+        
+        function createNewUser() {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%;">
+                    <h3 style="margin-bottom: 20px; color: #000;">Create New User</h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Username:</label>
+                        <input type="text" id="newUserUsername" placeholder="Enter username" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Email:</label>
+                        <input type="email" id="newUserEmail" placeholder="Enter email address" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Role:</label>
+                        <select id="newUserRole" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="viewer">Viewer</option>
+                            <option value="developer">Developer</option>
+                            <option value="administrator">Administrator</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Password:</label>
+                        <input type="password" id="newUserPassword" placeholder="Enter password" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                        <button onclick="this.closest('div').parentElement.remove()" 
+                                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="saveNewUser()" 
+                                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Create User
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+        
+        async function saveNewUser() {
+            const username = document.getElementById('newUserUsername').value.trim();
+            const email = document.getElementById('newUserEmail').value.trim();
+            const role = document.getElementById('newUserRole').value;
+            const password = document.getElementById('newUserPassword').value;
+            
+            if (!username || !email || !password) {
+                showNotification('All fields are required', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, role, password })
+                });
+                
+                if (response.ok) {
+                    showNotification('User created successfully!', 'success');
+                    document.querySelector('[style*="position: fixed"]').remove();
+                    loadUsers();
+                } else {
+                    showNotification('Failed to create user', 'error');
+                }
+            } catch (error) {
+                showNotification('Error creating user: ' + error.message, 'error');
+            }
+        }
+        
+        async function editUser(userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (!user) return;
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%;">
+                    <h3 style="margin-bottom: 20px; color: #000;">Edit User: ${user.username}</h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Username:</label>
+                        <input type="text" id="editUserUsername" value="${user.username}" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Email:</label>
+                        <input type="email" id="editUserEmail" value="${user.email}" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Role:</label>
+                        <select id="editUserRole" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                            <option value="developer" ${user.role === 'developer' ? 'selected' : ''}>Developer</option>
+                            <option value="administrator" ${user.role === 'administrator' ? 'selected' : ''}>Administrator</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Status:</label>
+                        <select id="editUserStatus" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="active" ${user.status === 'active' ? 'selected' : ''}>Active</option>
+                            <option value="inactive" ${user.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                        <button onclick="this.closest('div').parentElement.remove()" 
+                                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="saveUserChanges('${userId}')" 
+                                style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+        
+        async function saveUserChanges(userId) {
+            const username = document.getElementById('editUserUsername').value.trim();
+            const email = document.getElementById('editUserEmail').value.trim();
+            const role = document.getElementById('editUserRole').value;
+            const status = document.getElementById('editUserStatus').value;
+            
+            if (!username || !email) {
+                showNotification('Username and email are required', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/users/${userId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, role, status })
+                });
+                
+                if (response.ok) {
+                    showNotification('User updated successfully!', 'success');
+                    document.querySelector('[style*="position: fixed"]').remove();
+                    loadUsers();
+                } else {
+                    showNotification('Failed to update user', 'error');
+                }
+            } catch (error) {
+                showNotification('Error updating user: ' + error.message, 'error');
+            }
+        }
+        
+        async function resetUserPassword(userId) {
+            const newPassword = prompt('Enter new password for user:');
+            if (!newPassword) return;
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/users/${userId}/password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: newPassword })
+                });
+                
+                if (response.ok) {
+                    showNotification('Password reset successfully!', 'success');
+                } else {
+                    showNotification('Failed to reset password', 'error');
+                }
+            } catch (error) {
+                showNotification('Error resetting password: ' + error.message, 'error');
+            }
+        }
+        
+        async function deleteUser(userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (!confirm(`Are you sure you want to delete user "${user.username}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showNotification('User deleted successfully!', 'success');
+                    loadUsers();
+                } else {
+                    showNotification('Failed to delete user', 'error');
+                }
+            } catch (error) {
+                showNotification('Error deleting user: ' + error.message, 'error');
+            }
+        }
+        
+        async function viewSecret(secretId) {
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}/value`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const secret = data.data;
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                        background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                        justify-content: center; z-index: 1000;
+                    `;
+                    
+                    modal.innerHTML = `
+                        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%;">
+                            <h3>Secret: ${secret.name}</h3>
+                            <div style="margin: 15px 0;">
+                                <label><strong>Value:</strong></label>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                                    <input type="password" id="secretValue" value="${secret.value}" 
+                                           style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" readonly>
+                                    <button onclick="toggleSecretVisibility()" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                        👁️ Show
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="text-align: right; margin-top: 20px;">
+                                <button onclick="this.closest('div').parentElement.remove()" 
+                                        style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(modal);
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) modal.remove();
+                    });
+                }
+            } catch (error) {
+                alert('Error loading secret: ' + error.message);
+            }
+        }
+        
+        function toggleSecretVisibility() {
+            const input = document.getElementById('secretValue');
+            const button = event.target;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                button.textContent = '🙈 Hide';
+            } else {
+                input.type = 'password';
+                button.textContent = '👁️ Show';
+            }
+        }
+        
+        async function deleteSecret(secretId) {
+            if (!confirm('Are you sure you want to delete this secret?')) return;
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('Secret deleted successfully!');
+                    loadSecrets();
+                } else {
+                    alert('Failed to delete secret');
+                }
+            } catch (error) {
+                alert('Error deleting secret: ' + error.message);
+            }
+        }
+        
+        function refreshDashboard() {
+            loadDashboardStats();
+            loadSecrets();
+        }
+        
+        async function editSecret(secretId) {
+            try {
+                // First get the current secret data
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}/value`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const secret = data.data;
+                    showEditSecretModal(secret);
+                }
+            } catch (error) {
+                showNotification('Error loading secret for editing', 'error');
+            }
+        }
+        
+        function showEditSecretModal(secret) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%;">
+                    <h3 style="margin-bottom: 20px; color: #000;">Edit Secret: ${secret.name}</h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Name:</label>
+                        <input type="text" id="editSecretName" value="${secret.name}" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Value:</label>
+                        <textarea id="editSecretValue" rows="4" 
+                                  style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${secret.value}</textarea>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Tags (comma-separated):</label>
+                        <input type="text" id="editSecretTags" value="${secret.tags ? secret.tags.join(', ') : ''}" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                        <button onclick="this.closest('div').parentElement.remove()" 
+                                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="saveSecretChanges('${secret.id}')" 
+                                style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+        
+        async function saveSecretChanges(secretId) {
+            const name = document.getElementById('editSecretName').value.trim();
+            const value = document.getElementById('editSecretValue').value;
+            const tagsInput = document.getElementById('editSecretTags').value.trim();
+            const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+            
+            if (!name || !value) {
+                showNotification('Name and value are required', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, value, tags })
+                });
+                
+                if (response.ok) {
+                    showNotification('Secret updated successfully!', 'success');
+                    document.querySelector('[style*="position: fixed"]').remove();
+                    loadSecrets();
+                } else {
+                    showNotification('Failed to update secret', 'error');
+                }
+            } catch (error) {
+                showNotification('Error updating secret: ' + error.message, 'error');
+            }
+        }
+        
+        async function copySecret(secretId) {
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}/value`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    await navigator.clipboard.writeText(data.data.value);
+                    showNotification('Secret value copied to clipboard!', 'success');
+                } else {
+                    showNotification('Failed to load secret value', 'error');
+                }
+            } catch (error) {
+                showNotification('Error copying secret: ' + error.message, 'error');
+            }
+        }
+        
+        function createNewSecret() {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%;">
+                    <h3 style="margin-bottom: 20px; color: #000;">Create New Secret</h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Name:</label>
+                        <input type="text" id="newSecretName" placeholder="Enter secret name" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Value:</label>
+                        <textarea id="newSecretValue" rows="4" placeholder="Enter secret value" 
+                                  style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #000;">Tags (comma-separated):</label>
+                        <input type="text" id="newSecretTags" placeholder="e.g. production, database, api" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                        <button onclick="this.closest('div').parentElement.remove()" 
+                                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="saveNewSecret()" 
+                                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Create Secret
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+        
+        async function saveNewSecret() {
+            const name = document.getElementById('newSecretName').value.trim();
+            const value = document.getElementById('newSecretValue').value;
+            const tagsInput = document.getElementById('newSecretTags').value.trim();
+            const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+            
+            if (!name || !value) {
+                showNotification('Name and value are required', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/secrets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, value, tags })
+                });
+                
+                if (response.ok) {
+                    showNotification('Secret created successfully!', 'success');
+                    document.querySelector('[style*="position: fixed"]').remove();
+                    loadSecrets();
+                } else {
+                    showNotification('Failed to create secret', 'error');
+                }
+            } catch (error) {
+                showNotification('Error creating secret: ' + error.message, 'error');
+            }
+        }
+        
+        // Notification system
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed; top: 20px; right: 20px; z-index: 2000;
+                padding: 12px 20px; border-radius: 4px; color: white;
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#007bff'};
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        }
+    </script>
+</body>
+</html>

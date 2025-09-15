@@ -34,18 +34,18 @@ func NewWebHandler() *WebHandler {
 // SetupWebRoutes sets up web interface routes
 func (h *WebHandler) SetupWebRoutes(router *gin.Engine) {
 	// Serve static files
-	router.Static("/web", "./web")
+	router.Static("/static", "./web")
 	
 	// Serve dashboard as default
 	router.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, "/web/dashboard.html")
+		c.Redirect(http.StatusMovedPermanently, "/static/dashboard.html")
 	})
 	
 	// WebSocket endpoint
 	router.GET("/ws", h.handleWebSocket)
 	
 	// API endpoints for web interface
-	web := router.Group("/api/v1")
+	web := router.Group("/web/api")
 	{
 		// System endpoints
 		web.GET("/system/stats", h.getSystemStats)

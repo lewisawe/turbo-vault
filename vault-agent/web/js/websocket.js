@@ -1,4 +1,4 @@
-// WebSocket functionality for real-time updates
+// WebSocket functionality for real-time updates - DISABLED
 class WebSocketManager {
     constructor(app) {
         this.app = app;
@@ -6,9 +6,14 @@ class WebSocketManager {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 1000;
+        
+        // Disable websocket for local development
+        console.log('WebSocket disabled for local development');
     }
 
     connect() {
+        // Disabled - return early
+        return;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
 

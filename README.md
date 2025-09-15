@@ -35,14 +35,65 @@ A self-hosted key management solution that gives developers full control over th
 
 ## Quick Start
 
-```bash
-# Deploy vault agent
-docker run -d --name keyvault-agent \
-  -v ./config:/config \
-  -v ./data:/data \
-  -p 8080:8080 \
-  keyvault/agent:latest
+### Prerequisites
+- Docker and Docker Compose
+- Git
+- 1GB free disk space
+- Ports 8080 and 3000 available
 
-# Connect to control plane
-keyvault-cli register --endpoint https://your-dashboard.com --token <registration-token>
+### One-Command Installation
+
+```bash
+# Clone and install
+git clone <repository-url>
+cd keyvault
+./install.sh
+```
+
+### Manual Installation
+
+```bash
+# 1. Generate master key
+mkdir -p config
+openssl rand -hex 16 > config/master.key
+chmod 600 config/master.key
+
+# 2. Start services
+docker compose up -d
+
+# 3. Validate deployment
+./validate-deployment.sh
+```
+
+### Access Points
+
+- **Web Interface**: http://localhost:3000
+- **API Documentation**: http://localhost:8080/swagger/index.html  
+- **Demo Login**: admin / admin123
+
+### Using the CLI
+
+```bash
+# Build the CLI
+cd vault-agent
+go build -o vault-cli cmd/cli/main.go
+
+# Configure CLI
+echo "endpoint: http://localhost:8080" > .vault-cli.yaml
+echo "token: demo-admin-token-2025" >> .vault-cli.yaml
+
+# Test CLI
+./vault-cli system status
+./vault-cli secrets list
+```
+
+### Troubleshooting
+
+If installation fails, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) or run:
+
+```bash
+# Reset and try again
+docker compose down -v
+rm -rf data/ config/master.key
+./install.sh
 ```

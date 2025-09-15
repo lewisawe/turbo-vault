@@ -102,18 +102,26 @@ func runSystemStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	resp, err := client.Get("/api/v1/system/status")
+	resp, err := client.Get("/api/v1/system/stats")
 	if err != nil {
 		return fmt.Errorf("failed to get system status: %w", err)
 	}
 
-	var status map[string]interface{}
-	if err := client.ParseResponse(resp, &status); err != nil {
-		return err
+	var result struct {
+		Success bool                   `json:"success"`
+		Data    map[string]interface{} `json:"data"`
+	}
+
+	if err := client.ParseResponse(resp, &result); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !result.Success {
+		return fmt.Errorf("failed to get system status")
 	}
 
 	printer := NewPrinter()
-	return printer.Print(status)
+	return printer.Print(result.Data)
 }
 
 func runSystemHealth(cmd *cobra.Command, args []string) error {

@@ -1,7 +1,9 @@
 package testing
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -145,14 +147,20 @@ func (its *IntegrationTestSuite) setupTestEnvironment(ctx context.Context) error
 		switch r.URL.Path {
 		case "/health":
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"healthy"}`))
+			json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 		case "/api/v1/secrets":
 			if r.Method == "POST" {
 				w.WriteHeader(http.StatusCreated)
-				w.Write([]byte(`{"id":"test-secret","name":"test","created":true}`))
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"id": "test-secret", 
+					"name": "test", 
+					"created": true,
+				})
 			} else {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"secrets":[{"id":"test-secret","name":"test"}]}`))
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"secrets": []map[string]string{{"id": "test-secret", "name": "test"}},
+				})
 			}
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -255,8 +263,10 @@ func (its *IntegrationTestSuite) testAPIStorageInteraction(ctx context.Context) 
 	stepStart := time.Now()
 
 	// Simulate API call
+	payload := map[string]string{"name": "test-secret", "value": "test-value"}
+	jsonData, _ := json.Marshal(payload)
 	resp, err := http.Post(its.testServer.URL+"/api/v1/secrets", "application/json", 
-		strings.NewReader(`{"name":"test-secret","value":"test-value"}`))
+		bytes.NewReader(jsonData))
 	if err != nil {
 		step1.Success = false
 		step1.Error = err.Error()
