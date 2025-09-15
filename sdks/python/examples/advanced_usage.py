@@ -94,7 +94,7 @@ async def cloud_integration_example():
         for provider in ['aws', 'azure']:
             try:
                 cloud_secrets = await cloud_integration.list_secrets_from_provider(provider)
-                logger.info(f"Secrets in {provider}: {cloud_secrets}")
+                logger.info(f"Found {len(cloud_secrets)} secrets in {provider}")
             except Exception as e:
                 logger.warning(f"Failed to list secrets from {provider}: {e}")
 

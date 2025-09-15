@@ -8,6 +8,19 @@ import (
 	"time"
 )
 
+const (
+	// Performance test constants
+	defaultMaxConcurrency     = 100
+	defaultTargetLatencyP95   = 100 * time.Millisecond
+	baselineRPS              = 100
+	normalConcurrency        = 50
+	peakConcurrency          = 100
+	minProcessingTime        = 50
+	maxProcessingTimeRange   = 100
+	percentileMultiplier     = 100
+	sleepMicroseconds        = 100
+)
+
 // PerformanceTestSuite manages performance testing and benchmarking
 type PerformanceTestSuite struct {
 	config  *PerformanceTestConfig
@@ -112,13 +125,13 @@ func NewPerformanceTestSuite(config *PerformanceTestConfig) *PerformanceTestSuit
 	if config == nil {
 		config = &PerformanceTestConfig{
 			BaseURL:           "http://localhost:8080",
-			MaxConcurrency:    100,
+			MaxConcurrency:    defaultMaxConcurrency,
 			TestDuration:      5 * time.Minute,
 			RampUpDuration:    30 * time.Second,
 			RampDownDuration:  30 * time.Second,
 			RequestTimeout:    10 * time.Second,
 			TargetRPS:         1000,
-			TargetLatencyP95:  100 * time.Millisecond,
+			TargetLatencyP95:  defaultTargetLatencyP95,
 			TargetLatencyP99:  200 * time.Millisecond,
 		}
 	}
@@ -156,11 +169,11 @@ func (pts *PerformanceTestSuite) RunAllTests(ctx context.Context) (*PerformanceR
 // runLoadTests executes load testing scenarios
 func (pts *PerformanceTestSuite) runLoadTests(ctx context.Context) error {
 	loadPatterns := []LoadPattern{
-		{Name: "Baseline Load", Duration: 2 * time.Minute, Concurrency: 10, RPS: 100, Pattern: "constant"},
-		{Name: "Normal Load", Duration: 3 * time.Minute, Concurrency: 50, RPS: 500, Pattern: "constant"},
-		{Name: "Peak Load", Duration: 2 * time.Minute, Concurrency: 100, RPS: 1000, Pattern: "constant"},
+		{Name: "Baseline Load", Duration: 2 * time.Minute, Concurrency: 10, RPS: baselineRPS, Pattern: "constant"},
+		{Name: "Normal Load", Duration: 3 * time.Minute, Concurrency: normalConcurrency, RPS: 500, Pattern: "constant"},
+		{Name: "Peak Load", Duration: 2 * time.Minute, Concurrency: peakConcurrency, RPS: 1000, Pattern: "constant"},
 		{Name: "Spike Load", Duration: 1 * time.Minute, Concurrency: 200, RPS: 2000, Pattern: "spike"},
-		{Name: "Ramp Up Load", Duration: 5 * time.Minute, Concurrency: 100, RPS: 1000, Pattern: "ramp"},
+		{Name: "Ramp Up Load", Duration: 5 * time.Minute, Concurrency: peakConcurrency, RPS: 1000, Pattern: "ramp"},
 	}
 
 	for _, pattern := range loadPatterns {
@@ -267,7 +280,7 @@ func (pts *PerformanceTestSuite) executeLoadTest(ctx context.Context, pattern Lo
 	
 	if result.TotalRequests > 0 {
 		result.AvgLatency = time.Duration(atomic.LoadInt64(&totalLatency) / result.TotalRequests)
-		result.ErrorRate = float64(result.FailedRequests) / float64(result.TotalRequests) * 100
+		result.ErrorRate = float64(result.FailedRequests) / float64(result.TotalRequests) * percentileMultiplier
 	}
 	
 	result.MinLatency = time.Duration(atomic.LoadInt64(&minLatency))
@@ -294,7 +307,7 @@ func (pts *PerformanceTestSuite) executeRequest(ctx context.Context) bool {
 	// In real implementation, this would make actual HTTP requests
 	
 	// Simulate request processing time
-	processingTime := time.Duration(50+rand.Intn(100)) * time.Millisecond
+	processingTime := time.Duration(minProcessingTime+rand.Intn(maxProcessingTimeRange)) * time.Millisecond
 	time.Sleep(processingTime)
 	
 	// Simulate 95% success rate
@@ -361,7 +374,7 @@ func (pts *PerformanceTestSuite) benchmarkSecretDeletion(ctx context.Context) *B
 func (pts *PerformanceTestSuite) benchmarkEncryption(ctx context.Context) *BenchmarkResult {
 	return pts.runBenchmark("Encryption Operations", func() {
 		// Simulate encryption
-		time.Sleep(time.Microsecond * 100)
+		time.Sleep(time.Microsecond * sleepMicroseconds)
 	})
 }
 
@@ -453,7 +466,7 @@ func (pts *PerformanceTestSuite) calculatePercentile(latencies []time.Duration, 
 		}
 	}
 	
-	index := int(float64(len(sorted)) * percentile / 100.0)
+	index := int(float64(len(sorted)) * percentile / percentileMultiplier)
 	if index >= len(sorted) {
 		index = len(sorted) - 1
 	}
@@ -496,7 +509,7 @@ func (pts *PerformanceTestSuite) calculateOverallMetrics() {
 	}
 	
 	if totalRequests > 0 {
-		pts.results.ErrorRate = float64(failedRequests) / float64(totalRequests) * 100
+		pts.results.ErrorRate = float64(failedRequests) / float64(totalRequests) * percentileMultiplier
 	}
 	
 	pts.results.Throughput.RequestsPerSecond = pts.results.AvgRPS

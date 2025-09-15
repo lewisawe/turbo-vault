@@ -118,3 +118,44 @@ Thumbs.db
 *.bak
 *.backup
 *.old
+
+# DevPost submission materials
+devpost/
+
+# Development and demo files
+*demo*.sh
+load-test-keys.sh
+# Keep essential deployment files
+!install.sh
+!validate-deployment.sh
+*IMPLEMENTATION*.md
+*SUMMARY*.md
+*NOTES*.md
+PRESENTER_NOTES.md
+DEMO_GUIDE.md
+SECURITY_PRESENTATION.md
+WEB_SECURITY_DEMO.md
+
+# Development specs and internal docs
+devpost/
+
+# Test files and directories
+*_test.go
+*test*.html
+*test*.json
+*test*.py
+*test*.js
+test-config.yaml
+cmd/test.go
+tests/
+internal/testing/
+
+# Terraform state and modules (keep .tf files but ignore state)
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Package build artifacts
+deployments/native-packages/build/
+deployments/native-packages/dist/

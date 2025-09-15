@@ -533,13 +533,278 @@
 
     <!-- Scripts -->
     <script src="js/app.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/secrets.js"></script>
-    <script src="js/policies.js"></script>
-    <script src="js/users.js"></script>
-    <script src="js/audit.js"></script>
-    <script src="js/analytics.js"></script>
-    <script src="js/settings.js"></script>
     <script src="js/websocket.js"></script>
+    
+    <!-- Debug Script -->
+    <script>
+        // Simple direct API call
+        async function loadSecretsSimple() {
+            try {
+                console.log('Loading secrets...');
+                const response = await fetch('http://localhost:8080/api/v1/secrets');
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Received data:', data);
+                
+                const tbody = document.getElementById('secretsTableBody');
+                if (tbody && data.success && data.data) {
+                    tbody.innerHTML = '';
+                    
+                    data.data.forEach(secret => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${secret.name}</td>
+                            <td><span class="status-badge status-${secret.status}">${secret.status}</span></td>
+                            <td>${secret.tags ? secret.tags.join(', ') : '-'}</td>
+                            <td>${new Date(secret.created_at).toLocaleDateString()}</td>
+                            <td>-</td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary" onclick="viewSecret('${secret.id}')">👁️ View</button>
+                                <button class="btn btn-sm btn-warning" onclick="rotateSecret('${secret.id}')">🔄 Rotate</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteSecret('${secret.id}')">🗑️ Delete</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    
+                    console.log(`Rendered ${data.data.length} secrets`);
+                } else {
+                    console.error('No tbody element found or no data');
+                }
+            } catch (error) {
+                console.error('Failed to load secrets:', error);
+                const tbody = document.getElementById('secretsTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="color: red;">Error loading secrets: ${error.message}</td></tr>`;
+                }
+            }
+        }
+        
+        // Load secrets when page loads
+        let isInitialized = false;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            if (isInitialized) return;
+            isInitialized = true;
+            
+            console.log('DOM loaded, loading secrets...');
+            loadSecretsSimple();
+            loadDashboardStats();
+            setupNavigation();
+        });
+        
+        function setupNavigation() {
+            // Add click handlers to navigation items (only once)
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    // Remove active class from all items
+                    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                    
+                    // Add active class to clicked item
+                    item.classList.add('active');
+                    
+                    // Get page name
+                    const page = item.dataset.page;
+                    
+                    // Hide all pages
+                    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+                    
+                    // Show selected page
+                    const targetPage = document.getElementById(page + 'Page');
+                    if (targetPage) {
+                        targetPage.style.display = 'block';
+                    }
+                    
+                    console.log('Navigated to:', page);
+                });
+            });
+        }
+        
+        // Load real dashboard statistics
+        async function loadDashboardStats() {
+            try {
+                // Load system stats
+                const statsResponse = await fetch('http://localhost:8080/api/v1/system/stats');
+                const statsData = await statsResponse.json();
+                
+                if (statsData.success) {
+                    const stats = statsData.data;
+                    
+                    // Update stat cards using IDs
+                    document.getElementById('totalSecrets').textContent = stats.total_secrets || 0;
+                    document.getElementById('totalPolicies').textContent = stats.active_policies || 0;
+                    document.getElementById('totalUsers').textContent = stats.total_users || 0;
+                    document.getElementById('uptime').textContent = formatUptime(stats.uptime_seconds || 0);
+                }
+                
+                // Load system health
+                const healthResponse = await fetch('http://localhost:8080/api/v1/system/health');
+                const healthData = await healthResponse.json();
+                
+                if (healthData.success) {
+                    const health = healthData.data;
+                    updateSystemStatus(health.status || 'offline');
+                }
+                
+            } catch (error) {
+                console.error('Error loading dashboard stats:', error);
+                // Set default values
+                document.getElementById('totalSecrets').textContent = '0';
+                document.getElementById('totalPolicies').textContent = '0';
+                document.getElementById('totalUsers').textContent = '0';
+                document.getElementById('uptime').textContent = '0m';
+                updateSystemStatus('offline');
+            }
+        }
+        
+        function updateSystemStatus(status) {
+            const statusElement = document.querySelector('.status-dot');
+            const statusText = document.querySelector('.sidebar-header span');
+            
+            if (statusElement && statusText) {
+                statusElement.className = 'status-dot ' + (status === 'online' ? 'online' : 'offline');
+                statusText.textContent = status === 'online' ? 'Online' : 'Offline';
+            }
+        }
+        
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else {
+                return `${minutes}m`;
+            }
+        }
+        
+        // Secret management functions
+        async function viewSecret(secretId) {
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}/value`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const secret = data.data;
+                    showSecretModal(secret);
+                } else {
+                    alert('Failed to load secret');
+                }
+            } catch (error) {
+                console.error('Error viewing secret:', error);
+                alert('Error loading secret: ' + error.message);
+            }
+        }
+        
+        function showSecretModal(secret) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%;">
+                    <h3>Secret: ${secret.name}</h3>
+                    <div style="margin: 15px 0;">
+                        <label><strong>Value:</strong></label>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                            <input type="password" id="secretValue" value="${secret.value}" 
+                                   style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" readonly>
+                            <button onclick="toggleSecretVisibility()" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                👁️ Show
+                            </button>
+                        </div>
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <small><strong>ID:</strong> ${secret.id}</small><br>
+                        <small><strong>Created:</strong> ${new Date(secret.created_at).toLocaleString()}</small><br>
+                        <small><strong>Version:</strong> ${secret.version}</small>
+                    </div>
+                    <div style="text-align: right; margin-top: 20px;">
+                        <button onclick="this.closest('div').parentElement.remove()" 
+                                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+        
+        function toggleSecretVisibility() {
+            const input = document.getElementById('secretValue');
+            const button = event.target;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                button.textContent = '🙈 Hide';
+            } else {
+                input.type = 'password';
+                button.textContent = '👁️ Show';
+            }
+        }
+        
+        async function rotateSecret(secretId) {
+            if (!confirm('Are you sure you want to rotate this secret? This will generate a new value.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}/rotate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Secret rotated successfully!');
+                    loadSecretsSimple(); // Reload the table
+                } else {
+                    alert('Failed to rotate secret');
+                }
+            } catch (error) {
+                console.error('Error rotating secret:', error);
+                alert('Error rotating secret: ' + error.message);
+            }
+        }
+        
+        async function deleteSecret(secretId) {
+            if (!confirm('Are you sure you want to delete this secret? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/secrets/${secretId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Secret deleted successfully!');
+                    loadSecretsSimple(); // Reload the table
+                } else {
+                    alert('Failed to delete secret');
+                }
+            } catch (error) {
+                console.error('Error deleting secret:', error);
+                alert('Error deleting secret: ' + error.message);
+            }
+        }
+    </script>
 </body>
 </html>

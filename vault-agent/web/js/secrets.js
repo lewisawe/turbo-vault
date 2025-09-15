@@ -23,9 +23,12 @@ class SecretsManager {
 
     async loadSecrets() {
         try {
+            console.log('Loading secrets from API...');
             const response = await this.app.apiRequest('/secrets');
-            this.secrets = response.secrets || [];
+            console.log('API response:', response);
+            this.secrets = response.data || [];
             this.filteredSecrets = [...this.secrets];
+            console.log('Loaded secrets:', this.secrets.length);
             this.renderSecretsTable();
         } catch (error) {
             console.error('Error loading secrets:', error);

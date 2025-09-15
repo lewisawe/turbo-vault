@@ -11,7 +11,7 @@ database:
 
 control_plane:
   enabled: true
-  url: https://api.keyvault.com
+  url: http://localhost:8081
   cert_file: ./config/client.crt
   key_file: ./config/client.key
   ca_file: ./config/ca.crt

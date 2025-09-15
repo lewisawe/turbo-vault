@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,6 +21,35 @@ import (
 	"github.com/keyvault/agent/internal/security"
 	"github.com/keyvault/agent/internal/storage"
 )
+
+func registerWithControlPlane(baseURL, agentID string) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	
+	agent := map[string]interface{}{
+		"id":           agentID,
+		"name":         "Vault Agent",
+		"version":      "1.0.0",
+		"capabilities": []string{"secrets", "encryption", "monitoring"},
+	}
+
+	jsonData, _ := json.Marshal(agent)
+	resp, err := client.Post(
+		baseURL+"/api/v1/agents/register",
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		log.Printf("Warning: Failed to register with control plane: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		log.Printf("Successfully registered with control plane as %s", agentID)
+	} else {
+		log.Printf("Registration failed with status: %d", resp.StatusCode)
+	}
+}
 
 const Version = "1.0.0"
 
@@ -55,17 +86,7 @@ func main() {
 	defer store.Close()
 
 	// Initialize security manager
-	securityConfig := &security.ManagerConfig{
-		EnableHardening:     true,
-		EnableScanning:      true,
-		EnableTesting:       true,
-		EnableCompliance:    true,
-		ReportDirectory:     "./security-reports",
-		ScanInterval:        24 * time.Hour,
-		TestInterval:        7 * 24 * time.Hour,
-		ComplianceStandards: []string{"SOC2", "ISO27001", "PCI-DSS"},
-	}
-	securityManager := security.NewSecurityManager(securityConfig)
+	securityManager := security.NewMinimalSecurityService()
 
 	// Initialize security manager
 	if err := securityManager.Initialize(ctx); err != nil {
@@ -81,10 +102,7 @@ func main() {
 	}
 
 	// Initialize control plane service
-	cpService, err := controlplane.NewService(&cfg.ControlPlane, store, agentID)
-	if err != nil {
-		log.Fatal("Failed to initialize control plane service:", err)
-	}
+	cpService := controlplane.NewSimpleService(&cfg.ControlPlane, store, agentID)
 
 	// Start control plane service
 	if err := cpService.Start(ctx); err != nil {
@@ -115,6 +133,16 @@ func main() {
 	// Get hardened TLS configuration from security manager
 	tlsConfig := securityManager.GetTLSConfig()
 	
+	// Initialize control plane registration
+	controlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
+	if controlPlaneURL == "" {
+		controlPlaneURL = "http://localhost:8081"
+	}
+	cpAgentID := os.Getenv("AGENT_ID")
+	if cpAgentID == "" {
+		cpAgentID = "vault-agent-main"
+	}
+
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, port),
 		Handler:      router,
@@ -130,6 +158,14 @@ func main() {
 			log.Fatal("Server failed:", err)
 		}
 	}()
+
+	// Register with control plane after server starts
+	go func() {
+		time.Sleep(2 * time.Second)
+		registerWithControlPlane(controlPlaneURL, cpAgentID)
+	}()
+
+	log.Printf("Vault Agent started on %s", server.Addr)
 
 	// Wait for shutdown signal
 	<-sigCh

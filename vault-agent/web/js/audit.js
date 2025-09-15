@@ -71,19 +71,41 @@ class AuditManager {
         const row = document.createElement('tr');
         const resultClass = log.result === 'success' ? 'text-success' : 'text-danger';
         
-        row.innerHTML = `
-            <td>${this.app.formatDate(log.timestamp)}</td>
-            <td>
-                <span class="event-type-badge event-${log.event_type}">
-                    ${this.formatEventType(log.event_type)}
-                </span>
-            </td>
-            <td>${this.escapeHtml(log.actor?.username || log.actor?.id || 'System')}</td>
-            <td>${this.escapeHtml(log.resource?.type || '')}: ${this.escapeHtml(log.resource?.id || '')}</td>
-            <td>${this.escapeHtml(log.action)}</td>
-            <td><span class="${resultClass}">${log.result}</span></td>
-            <td>${log.ip_address || ''}</td>
-        `;
+        // Create cells safely
+        const timestampCell = document.createElement('td');
+        timestampCell.textContent = this.app.formatDate(log.timestamp);
+        
+        const eventTypeCell = document.createElement('td');
+        const eventBadge = document.createElement('span');
+        eventBadge.className = `event-type-badge event-${log.event_type}`;
+        eventBadge.textContent = this.formatEventType(log.event_type);
+        eventTypeCell.appendChild(eventBadge);
+        
+        const actorCell = document.createElement('td');
+        actorCell.textContent = log.actor?.username || log.actor?.id || 'System';
+        
+        const resourceCell = document.createElement('td');
+        resourceCell.textContent = `${log.resource?.type || ''}: ${log.resource?.id || ''}`;
+        
+        const actionCell = document.createElement('td');
+        actionCell.textContent = log.action;
+        
+        const resultCell = document.createElement('td');
+        const resultSpan = document.createElement('span');
+        resultSpan.className = resultClass;
+        resultSpan.textContent = log.result;
+        resultCell.appendChild(resultSpan);
+        
+        const ipCell = document.createElement('td');
+        ipCell.textContent = log.ip_address || '';
+        
+        row.appendChild(timestampCell);
+        row.appendChild(eventTypeCell);
+        row.appendChild(actorCell);
+        row.appendChild(resourceCell);
+        row.appendChild(actionCell);
+        row.appendChild(resultCell);
+        row.appendChild(ipCell);
         
         // Add click handler to show details
         row.style.cursor = 'pointer';
@@ -99,26 +121,68 @@ class AuditManager {
     showAuditDetails(log) {
         const modal = document.createElement('div');
         modal.className = 'modal active';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Audit Log Details</h3>
-                    <button class="modal-close" onclick="this.closest('.modal').remove()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="audit-details">
-                        <div class="form-group">
-                            <label>Event ID</label>
-                            <input type="text" value="${log.id}" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>Timestamp</label>
-                            <input type="text" value="${this.app.formatDate(log.timestamp)}" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>Event Type</label>
-                            <input type="text" value="${this.formatEventType(log.event_type)}" readonly>
-                        </div>
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        const modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        
+        const title = document.createElement('h3');
+        title.textContent = 'Audit Log Details';
+        
+        const closeButton = document.createElement('button');
+        closeButton.className = 'modal-close';
+        closeButton.textContent = '×';
+        closeButton.onclick = () => modal.remove();
+        
+        modalHeader.appendChild(title);
+        modalHeader.appendChild(closeButton);
+        
+        const modalBody = document.createElement('div');
+        modalBody.className = 'modal-body';
+        
+        const auditDetails = document.createElement('div');
+        auditDetails.className = 'audit-details';
+        
+        // Create form groups safely
+        const createFormGroup = (label, value) => {
+            const group = document.createElement('div');
+            group.className = 'form-group';
+            
+            const labelEl = document.createElement('label');
+            labelEl.textContent = label;
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = value;
+            input.readOnly = true;
+            
+            group.appendChild(labelEl);
+            group.appendChild(input);
+            return group;
+        };
+        
+        auditDetails.appendChild(createFormGroup('Event ID', log.id));
+        auditDetails.appendChild(createFormGroup('Timestamp', this.app.formatDate(log.timestamp)));
+        auditDetails.appendChild(createFormGroup('Event Type', this.formatEventType(log.event_type)));
+        auditDetails.appendChild(createFormGroup('Actor', log.actor?.username || log.actor?.id || 'System'));
+        auditDetails.appendChild(createFormGroup('Action', log.action));
+        auditDetails.appendChild(createFormGroup('Result', log.result));
+        auditDetails.appendChild(createFormGroup('IP Address', log.ip_address || 'N/A'));
+        
+        modalBody.appendChild(auditDetails);
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalBody);
+        modal.appendChild(modalContent);
+        
+        // Add modal body content
+        modalBody.innerHTML = `
+            <div class="form-group">
+                <label>Event Type</label>
+                <input type="text" value="${this.formatEventType(log.event_type)}" readonly>
+            </div>
+        `;
                         <div class="form-group">
                             <label>Actor</label>
                             <input type="text" value="${log.actor?.username || log.actor?.id || 'System'}" readonly>

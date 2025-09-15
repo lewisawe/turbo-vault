@@ -9,9 +9,13 @@ services:
       - ./config:/app/config
       - ./data:/app/data
     environment:
-      - DB_PATH=/app/data/vault.db
+      - VAULT_HOST=0.0.0.0
+      - VAULT_PORT=8080
+      - DB_TYPE=sqlite
+      - DB_CONNECTION_STRING=/app/data/vault.db
       - MASTER_KEY_FILE=/app/config/master.key
-      - CONTROL_PLANE_URL=https://api.keyvault.com
+      - OFFLINE_MODE=true
+      - LOG_LEVEL=info
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
@@ -25,6 +29,6 @@ services:
     ports:
       - "3000:80"
     volumes:
-      - ./web:/usr/share/nginx/html
+      - ./vault-agent/web:/usr/share/nginx/html
     depends_on:
       - vault-agent

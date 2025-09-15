@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/keyvault/agent/internal/backup"
 	"github.com/keyvault/agent/internal/crypto"
@@ -38,8 +39,11 @@ const (
 
 // NewBackupManager creates a new backup manager with enhanced backup service
 func NewBackupManager(storage *Storage, encryptor crypto.Encryptor, keyID string, logger *log.Logger) *BackupManager {
+	// Create adapter to bridge storage.Secret and backup.Secret
+	adapter := &storageAdapter{storage: storage}
+	
 	// Create enhanced backup manager
-	backupManager := backup.NewManager(storage, storage.db, encryptor, keyID, logger)
+	backupManager := backup.NewManager(adapter, storage.db, encryptor, keyID, logger)
 	
 	// Register default destinations
 	localDest := backup.NewLocalDestination()
@@ -134,4 +138,56 @@ func (bm *BackupManager) GetBackupStatistics(ctx context.Context) (*backup.Backu
 // CleanupExpiredBackups removes expired backups
 func (bm *BackupManager) CleanupExpiredBackups(ctx context.Context) error {
 	return bm.service.CleanupExpiredBackups(ctx)
+}
+
+// storageAdapter adapts storage.Storage to backup.StorageInterface
+type storageAdapter struct {
+	storage *Storage
+}
+
+func (a *storageAdapter) GetSecret(ctx context.Context, id string) (*backup.Secret, error) {
+	secret, err := a.storage.GetSecret(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return a.convertToBackupSecret(secret), nil
+}
+
+func (a *storageAdapter) CreateSecret(ctx context.Context, secret *backup.Secret) error {
+	storageSecret := a.convertFromBackupSecret(secret)
+	return a.storage.CreateSecret(ctx, storageSecret)
+}
+
+func (a *storageAdapter) UpdateSecret(ctx context.Context, id string, secret *backup.Secret) error {
+	storageSecret := a.convertFromBackupSecret(secret)
+	return a.storage.UpdateSecret(ctx, id, storageSecret)
+}
+
+func (a *storageAdapter) convertToBackupSecret(s *Secret) *backup.Secret {
+	return &backup.Secret{
+		ID:             s.ID,
+		Name:           s.Name,
+		EncryptedValue: s.EncryptedValue,
+		KeyID:          s.KeyID,
+		Metadata:       s.Metadata,
+		Tags:           s.Tags,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+		ExpiresAt:      s.ExpiresAt,
+		Version:        1, // Default version
+	}
+}
+
+func (a *storageAdapter) convertFromBackupSecret(s *backup.Secret) *Secret {
+	return &Secret{
+		ID:             s.ID,
+		Name:           s.Name,
+		EncryptedValue: s.EncryptedValue,
+		KeyID:          s.KeyID,
+		Metadata:       s.Metadata,
+		Tags:           s.Tags,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+		ExpiresAt:      s.ExpiresAt,
+	}
 }

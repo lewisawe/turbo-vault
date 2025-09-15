@@ -1,23 +1,46 @@
-// Main Application JavaScript
+// Main Application JavaScript - SIMPLIFIED
 class VaultApp {
     constructor() {
-        this.apiBase = '/api/v1';
-        this.currentPage = 'dashboard';
-        this.websocket = null;
-        this.authToken = localStorage.getItem('vault_token');
-        
-        this.init();
+        this.apiBase = 'http://localhost:8080/api/v1';
+        console.log('VaultApp initialized (simplified mode)');
     }
 
-    init() {
-        this.setupNavigation();
-        this.setupEventListeners();
-        this.checkAuthentication();
-        this.initializeWebSocket();
-        
-        // Load initial page
-        this.showPage('dashboard');
+    async apiRequest(endpoint, options = {}) {
+        const url = `${this.apiBase}${endpoint}`;
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
+
+        const finalOptions = { ...defaultOptions, ...options };
+        if (finalOptions.body && typeof finalOptions.body === 'object') {
+            finalOptions.body = JSON.stringify(finalOptions.body);
+        }
+
+        try {
+            const response = await fetch(url, finalOptions);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return await response.json();
+            }
+            
+            return await response.text();
+        } catch (error) {
+            console.error('API request failed:', error);
+            throw error;
+        }
     }
+}
+
+// Initialize simplified app
+window.app = new VaultApp();
 
     setupNavigation() {
         const navItems = document.querySelectorAll('.nav-item');
@@ -158,13 +181,14 @@ class VaultApp {
     }
 
     async checkAuthentication() {
-        try {
-            await this.apiRequest('/auth/verify');
-        } catch (error) {
-            if (error.message.includes('Authentication required')) {
-                this.showLoginModal();
-            }
-        }
+        // Temporarily disabled for local development
+        // try {
+        //     await this.apiRequest('/auth/verify');
+        // } catch (error) {
+        //     if (error.message.includes('Authentication required')) {
+        //         this.showLoginModal();
+        //     }
+        // }
     }
 
     handleAuthError() {
@@ -285,10 +309,17 @@ class VaultApp {
         
         const alert = document.createElement('div');
         alert.className = `alert alert-${type}`;
-        alert.innerHTML = `
-            <span>${message}</span>
-            <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
-        `;
+        
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        
+        const closeButton = document.createElement('button');
+        closeButton.textContent = '×';
+        closeButton.style.cssText = 'float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer;';
+        closeButton.onclick = () => alert.remove();
+        
+        alert.appendChild(messageSpan);
+        alert.appendChild(closeButton);
         
         alertContainer.appendChild(alert);
         

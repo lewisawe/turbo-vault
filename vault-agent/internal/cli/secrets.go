@@ -91,7 +91,7 @@ func init() {
 
 	// Get command flags
 	secretsGetCmd.Flags().Bool("show-value", false, "display the actual secret value")
-	secretsGetCmd.Flags().IntP("version", "v", 0, "get specific version (0 for latest)")
+	secretsGetCmd.Flags().Int("version", 0, "get specific version (0 for latest)")
 
 	// Create command flags
 	secretsCreateCmd.Flags().StringP("value", "V", "", "secret value (will prompt if not provided)")
@@ -142,7 +142,8 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 	}
 
 	var result struct {
-		Secrets []map[string]interface{} `json:"secrets"`
+		Success bool                     `json:"success"`
+		Data    []map[string]interface{} `json:"data"`
 		Total   int                      `json:"total"`
 	}
 
@@ -151,12 +152,18 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 	}
 
 	printer := NewPrinter()
-	if len(result.Secrets) == 0 {
+	if len(result.Data) == 0 {
 		fmt.Println("No secrets found")
 		return nil
 	}
 
-	return printer.Print(result.Secrets)
+	// Convert to []interface{} for printer compatibility
+	var printData []interface{}
+	for _, item := range result.Data {
+		printData = append(printData, item)
+	}
+
+	return printer.Print(printData)
 }
 
 func runSecretsGet(cmd *cobra.Command, args []string) error {
@@ -167,24 +174,56 @@ func runSecretsGet(cmd *cobra.Command, args []string) error {
 
 	name := args[0]
 	showValue, _ := cmd.Flags().GetBool("show-value")
-	version, _ := cmd.Flags().GetInt("version")
 
-	path := fmt.Sprintf("/api/v1/secrets/%s", name)
-	if version > 0 {
-		path += fmt.Sprintf("?version=%d", version)
+	// First, list all secrets to find the ID by name
+	resp, err := client.Get("/api/v1/secrets")
+	if err != nil {
+		return fmt.Errorf("failed to list secrets: %w", err)
 	}
 
-	resp, err := client.Get(path)
+	var listResult struct {
+		Success bool                     `json:"success"`
+		Data    []map[string]interface{} `json:"data"`
+	}
+
+	if err := client.ParseResponse(resp, &listResult); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Find secret by name
+	var secretID string
+	for _, secret := range listResult.Data {
+		if secret["name"] == name {
+			secretID = secret["id"].(string)
+			break
+		}
+	}
+
+	if secretID == "" {
+		return fmt.Errorf("secret '%s' not found", name)
+	}
+
+	// Get the secret value using ID
+	path := fmt.Sprintf("/api/v1/secrets/%s/value", secretID)
+	resp, err = client.Get(path)
 	if err != nil {
 		return fmt.Errorf("failed to get secret: %w", err)
 	}
 
-	var secret map[string]interface{}
-	if err := client.ParseResponse(resp, &secret); err != nil {
-		return err
+	var result struct {
+		Success bool                   `json:"success"`
+		Data    map[string]interface{} `json:"data"`
 	}
 
-	// Remove value if not requested
+	if err := client.ParseResponse(resp, &result); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !result.Success {
+		return fmt.Errorf("failed to get secret")
+	}
+
+	secret := result.Data
 	if !showValue {
 		delete(secret, "value")
 		secret["value"] = "[HIDDEN - use --show-value to display]"

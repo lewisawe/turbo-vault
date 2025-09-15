@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -38,14 +37,6 @@ func NewSecretHandler(storage storage.StorageBackend) *SecretHandler {
 func (h *SecretHandler) CreateSecret(c *gin.Context) {
 	var req CreateSecretRequest
 	if !ValidateRequest(c, &req) {
-		return
-	}
-
-	// Check if secret with same name already exists
-	existing, err := h.storage.GetSecretByName(context.Background(), req.Name)
-	if err == nil && existing != nil {
-		h.respondWithError(c, http.StatusConflict, ErrorTypeConflict, "SECRET_EXISTS", 
-			fmt.Sprintf("Secret with name '%s' already exists", req.Name), nil)
 		return
 	}
 
@@ -329,9 +320,9 @@ func (h *SecretHandler) validateUUID(c *gin.Context, id string) bool {
 }
 
 func (h *SecretHandler) getCurrentUser(c *gin.Context) string {
-	// In a real implementation, this would extract user from authentication context
-	if user, exists := c.Get("user"); exists {
-		return user.(string)
+	// Use the GetCurrentUser helper from auth middleware
+	if user := GetCurrentUser(c); user != nil {
+		return user.Username
 	}
 	return "system"
 }

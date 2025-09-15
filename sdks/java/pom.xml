@@ -45,7 +45,7 @@
         <jackson.version>2.16.0</jackson.version>
         <slf4j.version>2.0.9</slf4j.version>
         <caffeine.version>3.1.8</caffeine.version>
-        <spring.version>6.1.0</spring.version>
+        <spring.version>6.1.14</spring.version>
         <reactor.version>3.6.0</reactor.version>
         
         <!-- Test dependency versions -->

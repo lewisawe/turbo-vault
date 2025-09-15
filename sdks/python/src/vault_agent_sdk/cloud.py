@@ -274,7 +274,7 @@ class GCPSecretManager(CloudProvider):
             logger.info(f"Synced secret {name} to GCP Secret Manager as {secret_id}")
             return True
         except Exception as e:
-            logger.error(f"Failed to sync secret {name} to GCP: {e}")
+            logger.error(f"Failed to sync secret {name} to GCP: {str(e)}")
             return False
     
     async def get_secret(self, name: str) -> Optional[str]:

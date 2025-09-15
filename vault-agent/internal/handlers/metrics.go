@@ -12,7 +12,7 @@ func GetMetrics(store *storage.Storage) gin.HandlerFunc {
 		// In a real implementation, this would return Prometheus metrics
 		// For now, return basic JSON metrics
 		
-		secrets, err := store.ListSecrets()
+		secrets, err := store.ListSecrets(c.Request.Context(), nil)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get metrics"})
 			return

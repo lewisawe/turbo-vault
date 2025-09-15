@@ -133,7 +133,7 @@ func RotateSecret(store *storage.Storage) gin.HandlerFunc {
 		}
 
 		// Get existing secret
-		secret, err := store.GetSecret(id)
+		secret, err := store.GetSecret(c.Request.Context(), id)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Secret not found"})
 			return
@@ -147,7 +147,7 @@ func RotateSecret(store *storage.Storage) gin.HandlerFunc {
 			secret.RotationDue = &nextRotation
 		}
 
-		if err := store.UpdateSecret(id, secret); err != nil {
+		if err := store.UpdateSecret(c.Request.Context(), id, secret); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rotate secret"})
 			return
 		}

@@ -49,9 +49,19 @@ func NewRouter(config *RouterConfig) *gin.Engine {
 	secretHandler := NewSecretHandler(config.Storage)
 	healthHandler := NewHealthHandler(config.Storage, config.Version)
 	webHandler := handlers.NewWebHandler()
+	systemHandler := NewSystemHandler()
+	analyticsHandler := NewAnalyticsHandler()
+	policiesHandler := NewPoliciesHandler()
+	usersHandler := NewUsersHandler()
 
 	// Health check endpoint (no authentication required)
 	router.GET("/health", healthHandler.GetHealth)
+
+	// Authentication endpoints (no auth required)
+	auth := router.Group("/api/v1/auth")
+	{
+		auth.POST("/login", LoginHandler)
+	}
 
 	// Swagger documentation (optional)
 	if config.EnableSwagger {
@@ -61,8 +71,9 @@ func NewRouter(config *RouterConfig) *gin.Engine {
 		})
 	}
 
-	// API version 1 routes
+	// API version 1 routes (with authentication)
 	v1 := router.Group("/api/v1")
+	v1.Use(AuthMiddleware()) // Apply authentication to all API routes
 	{
 		// Secrets endpoints
 		secrets := v1.Group("/secrets")
@@ -74,6 +85,54 @@ func NewRouter(config *RouterConfig) *gin.Engine {
 			secrets.PUT("/:id", secretHandler.UpdateSecret)
 			secrets.DELETE("/:id", secretHandler.DeleteSecret)
 			secrets.POST("/:id/rotate", secretHandler.RotateSecret)
+			secrets.GET("/tags", secretHandler.GetSecretTags)
+		}
+
+		// Backup endpoints
+		backupHandler := NewBackupHandler(nil) // Will be properly initialized
+		backup := v1.Group("/backup")
+		{
+			backup.POST("", backupHandler.CreateBackup)
+			backup.GET("", backupHandler.ListBackups)
+			backup.POST("/:id/restore", backupHandler.RestoreBackup)
+		}
+
+		// System endpoints
+		system := v1.Group("/system")
+		{
+			system.GET("/stats", systemHandler.GetSystemStats)
+			system.GET("/health", systemHandler.GetSystemHealth)
+			system.GET("/activity", systemHandler.GetRecentActivity)
+			system.GET("/control-plane", systemHandler.GetControlPlaneStatus)
+			system.GET("/security", systemHandler.GetSecurityStatus)
+		}
+
+		// Analytics endpoints
+		analytics := v1.Group("/analytics")
+		{
+			analytics.GET("/access-patterns", analyticsHandler.GetAccessPatterns)
+			analytics.GET("/request-volume", analyticsHandler.GetRequestVolume)
+			analytics.GET("/response-times", analyticsHandler.GetResponseTimes)
+			analytics.GET("/error-rates", analyticsHandler.GetErrorRates)
+		}
+
+		// Metrics endpoints (for performance charts)
+		metrics := v1.Group("/metrics")
+		{
+			metrics.GET("/performance", analyticsHandler.GetResponseTimes)
+		}
+
+		// Policies endpoints
+		v1.GET("/policies", policiesHandler.ListPolicies)
+
+		// Users endpoints  
+		users := v1.Group("/users")
+		{
+			users.GET("", usersHandler.ListUsers)
+			users.POST("", usersHandler.CreateUser)
+			users.PUT("/:id", usersHandler.UpdateUser)
+			users.DELETE("/:id", usersHandler.DeleteUser)
+			users.PUT("/:id/password", usersHandler.ResetUserPassword)
 		}
 
 		// Metrics endpoint
